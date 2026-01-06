@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation'
 import AuthWrapper from '@/components/auth/AuthWrapper'
 import { useAuth } from '@/contexts/AuthContext'
 import { 
-  GraduationCap, Users, ChevronRight, Loader2, RefreshCw, 
-  LogOut, Calendar, Edit3, Sparkles
+  Users, ChevronRight, ChevronLeft, Loader2, RefreshCw, 
+  LogOut, Calendar, Edit3, Sparkles, X, Clock, BookOpen
 } from 'lucide-react'
 
 interface Batch {
@@ -15,12 +15,27 @@ interface Batch {
   sessionCount: number
 }
 
+interface Session {
+  id: number
+  date: string
+  time: string
+  subject_name: string
+  mentor_id: string
+  teams_meeting_link?: string
+}
+
 function MyBatchesContent() {
   const router = useRouter()
   const { user, signOut } = useAuth()
   const [batches, setBatches] = useState<Batch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Calendar state
+  const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null)
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [loadingSessions, setLoadingSessions] = useState(false)
 
   const fetchBatches = async () => {
     if (!user?.mentorId) {
@@ -49,15 +64,327 @@ function MyBatchesContent() {
     }
   }
 
+  const fetchSessions = async (batch: Batch) => {
+    setLoadingSessions(true)
+    try {
+      const response = await fetch(`/api/cohort/schedule?tableName=${batch.tableName}`)
+      const data = await response.json()
+      if (response.ok) {
+        setSessions(data.schedule || [])
+      }
+    } catch (err) {
+      console.error('Error fetching sessions:', err)
+    } finally {
+      setLoadingSessions(false)
+    }
+  }
+
   useEffect(() => {
     fetchBatches()
   }, [user?.mentorId])
 
+  useEffect(() => {
+    if (selectedBatch) {
+      fetchSessions(selectedBatch)
+    }
+  }, [selectedBatch])
+
   const handleSelectBatch = (batch: Batch) => {
-    sessionStorage.setItem('selectedBatch', JSON.stringify(batch))
-    router.push('/')
+    setSelectedBatch(batch)
+    setCurrentMonth(new Date())
   }
 
+  const handleBackToBatches = () => {
+    setSelectedBatch(null)
+    setSessions([])
+  }
+
+  // Calendar helpers
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+  }
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay()
+  }
+
+  const formatMonthYear = (date: Date) => {
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  }
+
+  const getSessionsForDate = (day: number) => {
+    const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    return sessions.filter(s => s.date === dateStr)
+  }
+
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    setCurrentMonth(prev => {
+      const newDate = new Date(prev)
+      if (direction === 'prev') {
+        newDate.setMonth(newDate.getMonth() - 1)
+      } else {
+        newDate.setMonth(newDate.getMonth() + 1)
+      }
+      return newDate
+    })
+  }
+
+  const isToday = (day: number) => {
+    const today = new Date()
+    return (
+      today.getDate() === day &&
+      today.getMonth() === currentMonth.getMonth() &&
+      today.getFullYear() === currentMonth.getFullYear()
+    )
+  }
+
+  const handleSessionClick = (session: Session) => {
+    sessionStorage.setItem('selectedBatch', JSON.stringify(selectedBatch))
+    sessionStorage.setItem('sessionPageData', JSON.stringify({
+      table: selectedBatch?.tableName,
+      date: session.date,
+      time: session.time,
+      batch: selectedBatch?.batchName || '',
+      from: 'my-batches'
+    }))
+    router.push('/session')
+  }
+
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(currentMonth)
+    const firstDay = getFirstDayOfMonth(currentMonth)
+    const days = []
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+    // Empty cells for days before the first day of month
+    for (let i = 0; i < firstDay; i++) {
+      days.push(
+        <div key={`empty-${i}`} className="h-24 sm:h-32 bg-slate-900/20 rounded-lg border border-white/5" />
+      )
+    }
+
+    // Days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const daySessions = getSessionsForDate(day)
+      const hasSession = daySessions.length > 0
+      const todayClass = isToday(day)
+
+      days.push(
+        <div
+          key={day}
+          className={`h-24 sm:h-32 rounded-lg border transition-all duration-200 overflow-hidden ${
+            todayClass
+              ? 'border-violet-500/50 bg-violet-500/10'
+              : hasSession
+              ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50'
+              : 'border-white/5 bg-slate-900/30 hover:bg-slate-800/30'
+          }`}
+        >
+          {/* Day number */}
+          <div className="p-1.5 sm:p-2 flex justify-between items-start">
+            <span className={`text-xs sm:text-sm font-medium ${
+              todayClass ? 'text-violet-400' : hasSession ? 'text-emerald-400' : 'text-slate-500'
+            }`}>
+              {day}
+            </span>
+            {todayClass && (
+              <span className="text-[10px] px-1.5 py-0.5 bg-violet-500 text-white rounded-full font-medium">
+                Today
+              </span>
+            )}
+          </div>
+
+          {/* Sessions */}
+          <div className="px-1.5 sm:px-2 space-y-1 overflow-y-auto max-h-16 sm:max-h-20 scrollbar-hide">
+            {daySessions.map((session, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleSessionClick(session)}
+                className="w-full text-left px-1.5 sm:px-2 py-1 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 rounded text-[10px] sm:text-xs text-emerald-300 truncate transition-colors border border-emerald-500/20 hover:border-emerald-500/40"
+              >
+                <span className="font-medium">{session.time?.slice(0, 5)}</span>
+                <span className="text-emerald-400/70 ml-1 hidden sm:inline">• {session.subject_name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div>
+        {/* Weekday headers */}
+        <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
+          {weekdays.map(day => (
+            <div key={day} className="text-center text-xs sm:text-sm font-medium text-slate-500 py-2">
+              {day}
+            </div>
+          ))}
+        </div>
+        {/* Calendar grid */}
+        <div className="grid grid-cols-7 gap-1 sm:gap-2">
+          {days}
+        </div>
+      </div>
+    )
+  }
+
+  // Calendar View
+  if (selectedBatch) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f]">
+        {/* Background */}
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/20 via-slate-950 to-teal-950/20" />
+          <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-emerald-600/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-teal-600/5 rounded-full blur-3xl" />
+        </div>
+
+        {/* Header */}
+        <header className="relative z-10 border-b border-white/5 bg-slate-950/50 backdrop-blur-xl sticky top-0">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleBackToBatches}
+                  className="p-2 hover:bg-white/5 rounded-lg transition-colors text-slate-400 hover:text-white"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                  <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg sm:text-xl font-bold text-white">
+                    {selectedBatch.batchName}
+                  </h1>
+                  <p className="text-slate-500 text-xs sm:text-sm">
+                    {selectedBatch.sessionCount} sessions
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="hidden sm:block text-right">
+                  <p className="text-white font-medium text-sm">{user?.name || 'Mentor'}</p>
+                  <p className="text-slate-500 text-xs">{user?.email}</p>
+                </div>
+                <button
+                  onClick={signOut}
+                  className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Navigation Tabs */}
+        <nav className="relative z-10 border-b border-white/5 bg-slate-900/30 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6">
+            <div className="flex gap-1 overflow-x-auto scrollbar-hide">
+              <button
+                onClick={() => router.push('/home')}
+                className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
+              >
+                <Calendar className="w-4 h-4 inline-block mr-2" />
+                Home
+              </button>
+              <button
+                className="px-4 sm:px-6 py-3 text-sm font-medium text-emerald-400 border-b-2 border-emerald-400 bg-emerald-500/5 whitespace-nowrap"
+              >
+                <Users className="w-4 h-4 inline-block mr-2" />
+                My Batches
+              </button>
+              <button
+                onClick={() => router.push('/edit-sessions')}
+                className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
+              >
+                <Edit3 className="w-4 h-4 inline-block mr-2" />
+                Edit Sessions
+              </button>
+            </div>
+          </div>
+        </nav>
+
+        {/* Calendar Content */}
+        <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          {/* Month Navigation */}
+          <div className="flex items-center justify-between mb-6 sm:mb-8">
+            <button
+              onClick={() => navigateMonth('prev')}
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 border border-white/10 hover:border-white/20 rounded-xl transition-all text-slate-300 hover:text-white"
+            >
+              <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline text-sm">Previous</span>
+            </button>
+
+            <h2 className="text-xl sm:text-3xl font-bold text-white">
+              {formatMonthYear(currentMonth)}
+            </h2>
+
+            <button
+              onClick={() => navigateMonth('next')}
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 border border-white/10 hover:border-white/20 rounded-xl transition-all text-slate-300 hover:text-white"
+            >
+              <span className="hidden sm:inline text-sm">Next</span>
+              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+          </div>
+
+          {/* Legend */}
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6 mb-6 text-xs sm:text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-violet-500/30 border border-violet-500/50" />
+              <span className="text-slate-400">Today</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500/50" />
+              <span className="text-slate-400">Has Session</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-slate-900/30 border border-white/5" />
+              <span className="text-slate-400">No Session</span>
+            </div>
+          </div>
+
+          {/* Loading */}
+          {loadingSessions ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+            </div>
+          ) : (
+            renderCalendar()
+          )}
+
+          {/* Summary */}
+          <div className="mt-6 sm:mt-8 p-4 sm:p-6 bg-gradient-to-r from-slate-800/50 to-slate-900/50 border border-white/5 rounded-2xl">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h3 className="text-white font-semibold mb-1">Sessions this month</h3>
+                <p className="text-slate-400 text-sm">
+                  {sessions.filter(s => {
+                    const d = new Date(s.date)
+                    return d.getMonth() === currentMonth.getMonth() && d.getFullYear() === currentMonth.getFullYear()
+                  }).length} sessions scheduled
+                </p>
+              </div>
+              <button
+                onClick={handleBackToBatches}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-xl transition-colors text-sm"
+              >
+                <Users className="w-4 h-4" />
+                View Other Batches
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // Batches List View
   return (
     <div className="min-h-screen bg-[#0a0a0f]">
       {/* Background */}
@@ -135,7 +462,7 @@ function MyBatchesContent() {
             Your <span className="text-violet-400">Batches</span>
           </h2>
           <p className="text-slate-400 text-sm sm:text-lg">
-            Select a batch to view and manage your sessions
+            Select a batch to view calendar and sessions
           </p>
         </div>
 
@@ -213,7 +540,7 @@ function MyBatchesContent() {
                   <div className="relative">
                     {/* Icon */}
                     <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-violet-500/20 to-indigo-500/20 border border-violet-500/20 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                      <Users className="w-6 h-6 sm:w-7 sm:h-7 text-violet-400" />
+                      <Calendar className="w-6 h-6 sm:w-7 sm:h-7 text-violet-400" />
                     </div>
 
                     {/* Batch Name */}
@@ -223,12 +550,12 @@ function MyBatchesContent() {
 
                     {/* Session Count */}
                     <p className="text-slate-400 text-sm mb-4">
-                      {batch.sessionCount} session{batch.sessionCount !== 1 ? 's' : ''} assigned
+                      {batch.sessionCount} session{batch.sessionCount !== 1 ? 's' : ''} scheduled
                     </p>
 
                     {/* Arrow */}
                     <div className="flex items-center text-violet-400 text-sm font-medium">
-                      <span>View Dashboard</span>
+                      <span>View Calendar</span>
                       <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </div>
@@ -238,9 +565,6 @@ function MyBatchesContent() {
           </>
         )}
       </main>
-
-      
-      
     </div>
   )
 }

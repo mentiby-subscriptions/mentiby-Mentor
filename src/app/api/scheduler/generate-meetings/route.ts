@@ -339,6 +339,41 @@ async function fetchOneDriveRecordings(accessToken: string): Promise<OneDriveRec
   }
 }
 
+// Create a shareable link for a recording (so external users can access it)
+async function createSharingLink(accessToken: string, fileId: string): Promise<string | null> {
+  const organizerUserId = process.env.MS_ORGANIZER_USER_ID
+  if (!organizerUserId) return null
+
+  try {
+    const url = `${MS_GRAPH_API_URL}/users/${organizerUserId}/drive/items/${fileId}/createLink`
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        type: 'view',           // Read-only access
+        scope: 'anonymous'      // Anyone with the link can view
+      })
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log(`    Could not create sharing link: ${response.status} - ${errorText}`)
+      return null
+    }
+
+    const data = await response.json()
+    return data.link?.webUrl || null
+
+  } catch (error: any) {
+    console.log(`    Error creating sharing link: ${error.message}`)
+    return null
+  }
+}
+
 // Match a session to a recording by meeting subject AND date
 // Recording names are like: "Cohort Basic 1.1 - Web Development - Saswata-20260105_162709UTC-Meeting Recording.mp4"
 // Meeting subjects are like: "Cohort Basic 1.1 - Web Development - Saswata"
@@ -388,6 +423,7 @@ function findRecordingForSession(
 }
 
 // Get recording URL for a session by checking OneDrive
+// Creates a shareable link so external users can access it
 async function fetchRecordingForSession(
   accessToken: string,
   meetingSubject: string,
@@ -403,7 +439,17 @@ async function fetchRecordingForSession(
   
   if (matchedRecording) {
     console.log(`  ✓ Found matching recording: ${matchedRecording.name}`)
-    // Return the SharePoint web URL - this is directly accessible
+    
+    // Create a shareable link so anyone (including external users) can access
+    const sharingLink = await createSharingLink(accessToken, matchedRecording.id)
+    
+    if (sharingLink) {
+      console.log(`  ✓ Created sharing link`)
+      return sharingLink
+    }
+    
+    // Fallback to direct URL if sharing link creation fails
+    console.log(`  ⚠ Could not create sharing link, using direct URL`)
     return matchedRecording.webUrl
   }
   

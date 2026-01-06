@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import AuthWrapper from '@/components/auth/AuthWrapper'
 import { 
   Calendar, Clock, Video, FileText, ArrowLeft, ArrowRight,
   Users, LogOut, Loader2, RefreshCw, Sparkles, Link2, Plus,
   Trash2, Check, ExternalLink, ChevronLeft,
-  BookOpen, AlertCircle
+  BookOpen, AlertCircle, Upload
 } from 'lucide-react'
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -41,15 +41,81 @@ interface ScheduleRow {
   day: string | null
 }
 
+interface SessionPageData {
+  table: string
+  date: string
+  time: string
+  batch: string
+  from: string
+}
+
 function SessionDetailsPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { user, signOut } = useAuth()
   
-  const tableName = searchParams.get('table')
-  const date = searchParams.get('date')
-  const time = searchParams.get('time')
-  const batchName = searchParams.get('batch') || 'Unknown Batch'
+  // Read from sessionStorage
+  const [pageData, setPageData] = useState<SessionPageData | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
+  
+  useEffect(() => {
+    const stored = sessionStorage.getItem('sessionPageData')
+    if (stored) {
+      try {
+        setPageData(JSON.parse(stored))
+      } catch {
+        router.push('/home')
+      }
+    } else {
+      router.push('/home')
+    }
+    setIsInitialized(true)
+  }, [router])
+
+  const tableName = pageData?.table || null
+  const date = pageData?.date || null
+  const time = pageData?.time || null
+  const batchName = pageData?.batch || 'Unknown Batch'
+  const fromPage = pageData?.from || 'home'
+
+  const handleBack = () => {
+    if (fromPage === 'my-batches') {
+      router.push('/my-batches')
+    } else {
+      router.push('/home')
+    }
+  }
+
+  // Parse cohort info from table name (e.g., basic1_1_schedule -> Basic, 1.1)
+  const parseCohortFromTable = (table: string) => {
+    if (!table) return { type: '', number: '' }
+    const name = table.replace('_schedule', '')
+    // Match pattern like basic1_1, mern2_0, placement3_5
+    const match = name.match(/([a-zA-Z]+)(\d+)_(\d+)/)
+    if (match) {
+      const type = match[1].charAt(0).toUpperCase() + match[1].slice(1)
+      const number = `${match[2]}.${match[3]}`
+      return { type, number }
+    }
+    return { type: name, number: '1.0' }
+  }
+
+  const handleUploadAttendance = () => {
+    const cohortInfo = parseCohortFromTable(tableName || '')
+    // Store attendance data in sessionStorage to keep URL clean
+    sessionStorage.setItem('attendanceUploadData', JSON.stringify({
+      cohortType: cohortInfo.type,
+      cohortNumber: cohortInfo.number,
+      subject: session?.subject_name || '',
+      date: date || '',
+      teacher: user?.name || '',
+      table: tableName || '',
+      batch: batchName,
+      time: time || '',
+      from: 'session',
+      sessionFrom: fromPage
+    }))
+    router.push('/attendance/upload')
+  }
 
   const [session, setSession] = useState<SessionDetails | null>(null)
   const [allSessions, setAllSessions] = useState<ScheduleRow[]>([])
@@ -110,9 +176,11 @@ function SessionDetailsPage() {
   }
 
   useEffect(() => {
-    fetchSession()
-    fetchAllSessions()
-  }, [tableName, date, time])
+    if (pageData) {
+      fetchSession()
+      fetchAllSessions()
+    }
+  }, [pageData])
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr)
@@ -470,7 +538,7 @@ function SessionDetailsPage() {
     setShowReschedule(null)
   }
 
-  if (loading) {
+  if (!isInitialized || loading || !pageData) {
     return (
       <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
@@ -486,10 +554,10 @@ function SessionDetailsPage() {
           <h2 className="text-xl text-white mb-2">Session Not Found</h2>
           <p className="text-slate-400 mb-4">{error}</p>
           <button
-            onClick={() => router.push('/home')}
+            onClick={handleBack}
             className="px-4 py-2 bg-violet-500 text-white rounded-lg"
           >
-            Go Home
+            Go Back
           </button>
         </div>
       </div>
@@ -513,11 +581,11 @@ function SessionDetailsPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
             <button
-              onClick={() => router.push('/home')}
+              onClick={handleBack}
               className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
             >
               <ChevronLeft className="w-5 h-5" />
-              <span>Back to Home</span>
+              <span>{fromPage === 'my-batches' ? 'Back to My Batches' : 'Back to Home'}</span>
             </button>
 
             <div className="flex items-center gap-3">
@@ -619,8 +687,8 @@ function SessionDetailsPage() {
           )}
         </div>
 
-        {/* Reschedule Buttons - copied styling from CohortScheduleEditor */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
+        {/* Action Buttons */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <button
             onClick={() => {
               setShowReschedule('prepone')
@@ -632,8 +700,19 @@ function SessionDetailsPage() {
             <div className="p-2 rounded-lg bg-cyan-500/10 group-hover:bg-cyan-500/20 transition-colors">
               <ArrowLeft className="w-5 h-5" />
             </div>
-            <span className="font-medium">Prepone Class</span>
+            <span className="font-medium">Prepone</span>
           </button>
+          
+          <button
+            onClick={handleUploadAttendance}
+            className="flex items-center justify-center gap-3 px-4 py-4 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 hover:border-blue-500/50 text-blue-400 rounded-xl transition-all group"
+          >
+            <div className="p-2 rounded-lg bg-blue-500/10 group-hover:bg-blue-500/20 transition-colors">
+              <Upload className="w-5 h-5" />
+            </div>
+            <span className="font-medium">Upload Attendance</span>
+          </button>
+          
           <button
             onClick={() => {
               setShowReschedule('postpone')
@@ -642,7 +721,7 @@ function SessionDetailsPage() {
             }}
             className="flex items-center justify-center gap-3 px-4 py-4 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 hover:border-orange-500/50 text-orange-400 rounded-xl transition-all group"
           >
-            <span className="font-medium">Postpone Class</span>
+            <span className="font-medium">Postpone</span>
             <div className="p-2 rounded-lg bg-orange-500/10 group-hover:bg-orange-500/20 transition-colors">
               <ArrowRight className="w-5 h-5" />
             </div>

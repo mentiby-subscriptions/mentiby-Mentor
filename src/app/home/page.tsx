@@ -33,13 +33,14 @@ function HomePage() {
 
   // Navigate to session details page
   const goToSession = (session: SessionData) => {
-    const params = new URLSearchParams({
+    sessionStorage.setItem('sessionPageData', JSON.stringify({
       table: session.tableName,
       date: session.date,
       time: session.time,
-      batch: session.batchName
-    })
-    router.push(`/session?${params.toString()}`)
+      batch: session.batchName,
+      from: 'home'
+    }))
+    router.push('/session')
   }
 
   const fetchSessions = async () => {

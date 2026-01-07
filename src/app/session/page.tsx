@@ -304,6 +304,18 @@ function SessionDetailsPage() {
     return now >= sessionDateTime
   }
 
+  // Check if current user is the swapped mentor (not the original)
+  const isSwappedMentor = () => {
+    if (!session || !user?.mentorId) return false
+    return session.swapped_mentor_id === parseInt(String(user.mentorId)) && 
+           session.mentor_id !== parseInt(String(user.mentorId))
+  }
+
+  // Check if session has recording (completed)
+  const hasRecording = () => {
+    return !!session?.session_recording && session.session_recording.trim() !== ''
+  }
+
   // Transform Graph API recording URL to our streaming endpoint
   const getRecordingUrl = (recordingUrl: string) => {
     // Check if it's a Microsoft Graph API URL
@@ -656,8 +668,22 @@ function SessionDetailsPage() {
 
   if (!isInitialized || loading || !pageData) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+      <div className="min-h-screen bg-[#0a0a0f] flex flex-col items-center justify-center">
+        {/* Background */}
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-950/20 via-slate-950 to-indigo-950/20" />
+        </div>
+        {/* Spinning rings */}
+        <div className="relative z-10 mb-6">
+          <div className="w-20 h-20 rounded-full border-4 border-transparent border-t-violet-500 border-r-indigo-500 animate-spin" />
+          <div className="absolute inset-1.5 w-[62px] h-[62px] rounded-full border-4 border-transparent border-b-cyan-400 border-l-purple-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-indigo-500 rounded-lg flex items-center justify-center shadow-lg shadow-violet-500/50 animate-pulse">
+              <BookOpen className="w-5 h-5 text-white" />
+            </div>
+          </div>
+        </div>
+        <p className="relative z-10 text-slate-400 text-sm">Loading session details...</p>
       </div>
     )
   }
@@ -805,17 +831,19 @@ function SessionDetailsPage() {
 
         {/* Action Buttons */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <button
-            onClick={() => {
-              setShowReschedule('prepone')
-              setNewDateForMove('')
-              setNewTimeForMove('')
-            }}
-            className="flex items-center justify-center gap-2 px-3 py-3 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-400 rounded-xl transition-all group"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="font-medium text-sm">Prepone</span>
-          </button>
+          {!isSessionStarted() && (
+            <button
+              onClick={() => {
+                setShowReschedule('prepone')
+                setNewDateForMove('')
+                setNewTimeForMove('')
+              }}
+              className="flex items-center justify-center gap-2 px-3 py-3 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-400 rounded-xl transition-all group"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="font-medium text-sm">Prepone</span>
+            </button>
+          )}
           
           <button
             onClick={handleUploadAttendance}
@@ -825,7 +853,7 @@ function SessionDetailsPage() {
             <span className="font-medium text-sm">Attendance</span>
           </button>
 
-          {!isSessionStarted() && (
+          {!isSwappedMentor() && !hasRecording() && (
             <button
               onClick={openSwapMentorModal}
               className="flex items-center justify-center gap-2 px-3 py-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 text-purple-400 rounded-xl transition-all group"
@@ -835,17 +863,19 @@ function SessionDetailsPage() {
             </button>
           )}
           
-          <button
-            onClick={() => {
-              setShowReschedule('postpone')
-              setNewDateForMove('')
-              setNewTimeForMove('')
-            }}
-            className="flex items-center justify-center gap-2 px-3 py-3 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 hover:border-orange-500/50 text-orange-400 rounded-xl transition-all group"
-          >
-            <span className="font-medium text-sm">Postpone</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          {!hasRecording() && (
+            <button
+              onClick={() => {
+                setShowReschedule('postpone')
+                setNewDateForMove('')
+                setNewTimeForMove('')
+              }}
+              className="flex items-center justify-center gap-2 px-3 py-3 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 hover:border-orange-500/50 text-orange-400 rounded-xl transition-all group"
+            >
+              <span className="font-medium text-sm">Postpone</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Swapped Mentor Indicator */}
@@ -1109,7 +1139,7 @@ function SessionDetailsPage() {
                 {/* Note */}
                 <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
                   <p className="text-amber-300 text-xs">
-                    ⚠️ Swapping mentor will only affect this session. The original mentor assignment remains unchanged.
+                    ⚠️ Supermentors will be auto-informed about the swap.
                   </p>
                 </div>
               </div>

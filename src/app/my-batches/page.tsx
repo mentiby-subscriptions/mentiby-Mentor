@@ -6,7 +6,7 @@ import AuthWrapper from '@/components/auth/AuthWrapper'
 import { useAuth } from '@/contexts/AuthContext'
 import { 
   Users, ChevronRight, ChevronLeft, Loader2, RefreshCw, 
-  LogOut, Calendar, Sparkles, X, Clock, BookOpen
+  LogOut, Calendar, Sparkles, X, Clock, BookOpen, Award
 } from 'lucide-react'
 
 interface Batch {
@@ -305,6 +305,13 @@ function MyBatchesContent() {
                 <Users className="w-4 h-4 inline-block mr-2" />
                 My Batches
               </button>
+              <button
+                onClick={() => router.push('/your-attendance')}
+                className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
+              >
+                <Award className="w-4 h-4 inline-block mr-2" />
+                Your Attendance
+              </button>
             </div>
           </div>
         </nav>
@@ -356,8 +363,17 @@ function MyBatchesContent() {
 
           {/* Loading */}
           {loadingSessions ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className="relative mb-6">
+                <div className="w-20 h-20 rounded-full border-4 border-transparent border-t-emerald-500 border-r-teal-500 animate-spin" />
+                <div className="absolute inset-1.5 w-[62px] h-[62px] rounded-full border-4 border-transparent border-b-cyan-400 border-l-green-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/50 animate-pulse">
+                    <Calendar className="w-5 h-5 text-white" />
+                  </div>
+                </div>
+              </div>
+              <p className="text-slate-400 text-sm">Loading sessions...</p>
             </div>
           ) : (
             renderCalendar()
@@ -448,6 +464,13 @@ function MyBatchesContent() {
               <Users className="w-4 h-4 inline-block mr-2" />
               My Batches
             </button>
+            <button
+              onClick={() => router.push('/your-attendance')}
+              className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
+            >
+              <Award className="w-4 h-4 inline-block mr-2" />
+              Your Attendance
+            </button>
           </div>
         </div>
       </nav>
@@ -467,7 +490,17 @@ function MyBatchesContent() {
         {/* Loading State */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-12 h-12 text-violet-400 animate-spin mb-4" />
+            <div className="relative mb-6">
+              <div className="w-24 h-24 rounded-full border-4 border-transparent border-t-violet-500 border-r-indigo-500 animate-spin" />
+              <div className="absolute inset-2 w-[80px] h-[80px] rounded-full border-4 border-transparent border-b-cyan-400 border-l-purple-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/50 animate-pulse">
+                  <Users className="w-6 h-6 text-white" />
+                </div>
+              </div>
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-violet-400 rounded-full animate-bounce" />
+              <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
+            </div>
             <p className="text-slate-400">Loading your batches...</p>
           </div>
         )}

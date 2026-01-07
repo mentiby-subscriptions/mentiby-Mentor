@@ -7,7 +7,7 @@ import AuthWrapper from '@/components/auth/AuthWrapper'
 import { 
   Calendar, Clock, Video, FileText,
   Users, LogOut, Loader2, RefreshCw,
-  BookOpen, Sparkles
+  BookOpen, Sparkles, Award
 } from 'lucide-react'
 
 interface SessionData {
@@ -147,6 +147,13 @@ function HomePage() {
               <Users className="w-4 h-4 inline-block mr-2" />
               My Batches
             </button>
+            <button
+              onClick={() => router.push('/your-attendance')}
+              className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
+            >
+              <Award className="w-4 h-4 inline-block mr-2" />
+              Your Attendance
+            </button>
           </div>
         </div>
       </nav>
@@ -162,8 +169,18 @@ function HomePage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+          <div className="flex flex-col items-center justify-center py-20">
+            {/* Spinning rings */}
+            <div className="relative mb-6">
+              <div className="w-20 h-20 rounded-full border-4 border-transparent border-t-violet-500 border-r-indigo-500 animate-spin" />
+              <div className="absolute inset-1.5 w-[62px] h-[62px] rounded-full border-4 border-transparent border-b-cyan-400 border-l-purple-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-indigo-500 rounded-lg flex items-center justify-center shadow-lg shadow-violet-500/50 animate-pulse">
+                  <Calendar className="w-5 h-5 text-white" />
+                </div>
+              </div>
+            </div>
+            <p className="text-slate-400 text-sm">Loading your schedule...</p>
           </div>
         ) : (
           <div className="grid lg:grid-cols-3 gap-6">

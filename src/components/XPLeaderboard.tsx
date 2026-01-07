@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Trophy, RefreshCw, Crown, Medal, Award, Zap, Clock, Users, Search, Filter, Phone, Copy, X } from 'lucide-react'
+import { Trophy, RefreshCw, Crown, Medal, Award, Zap, Clock, Users, Search, Filter, X } from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
 import { LeaderboardEntry } from '@/types'
 import { cn } from '@/lib/utils'
@@ -38,8 +38,6 @@ export default function XPLeaderboard() {
     total: number
     countdownSeconds: number
   } | null>(null)
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
-  const [showPhoneCopyMode, setShowPhoneCopyMode] = useState(false)
   const [toastNotification, setToastNotification] = useState<{
     show: boolean
     message: string
@@ -54,74 +52,6 @@ export default function XPLeaderboard() {
     setTimeout(() => {
       setToastNotification({ show: false, message: '', type: 'success' })
     }, 2000)
-  }
-
-  const handleRowSelect = (enrollmentId: string, isSelected: boolean) => {
-    setSelectedRows(prev => {
-      const newSet = new Set(prev)
-      if (isSelected) {
-        newSet.add(enrollmentId)
-      } else {
-        newSet.delete(enrollmentId)
-      }
-      return newSet
-    })
-  }
-
-  const handleSelectAll = (isSelected: boolean) => {
-    if (isSelected) {
-      setSelectedRows(new Set(filteredLeaderboard.map(row => row.enrollment_id)))
-    } else {
-      setSelectedRows(new Set())
-    }
-  }
-
-  const handleCopyPhoneNumbers = async () => {
-    if (selectedRows.size === 0) return
-
-    try {
-      // Fetch phone numbers from onboarding table using enrollment IDs
-      const { data: onboardingData, error } = await supabase
-        .from('onboarding')
-        .select('EnrollmentID, "Phone Number"')
-        .in('EnrollmentID', Array.from(selectedRows))
-      
-      if (error) {
-        throw new Error(`Failed to fetch phone numbers: ${error.message}`)
-      }
-
-      if (!onboardingData || onboardingData.length === 0) {
-        showToast('No phone numbers found for selected records!', 'error')
-        return
-      }
-
-      // Extract phone numbers (filter out empty/invalid ones)
-      const phoneNumbers = onboardingData
-        .map(row => row['Phone Number'])
-        .filter(phone => phone && phone.trim() !== '' && phone !== '-' && !phone.includes('undefined'))
-      
-      if (phoneNumbers.length === 0) {
-        showToast('No valid phone numbers found in selected rows!', 'error')
-        return
-      }
-
-      // Join with newlines
-      const phoneText = phoneNumbers.join('\n')
-      
-      // Copy to clipboard
-      await navigator.clipboard.writeText(phoneText)
-      
-      // Clear selection and hide checkboxes
-      setSelectedRows(new Set())
-      setShowPhoneCopyMode(false)
-      
-      // Show success message
-      showToast(`📋 Copied ${phoneNumbers.length} phone numbers to clipboard!`)
-      
-    } catch (error) {
-      console.error('❌ Copy failed:', error)
-      showToast(`Failed to copy phone numbers: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
-    }
   }
 
   const fetchLeaderboard = useCallback(async (showLoading = true) => {
@@ -233,7 +163,7 @@ export default function XPLeaderboard() {
       setError('')
       setUpdateProgress({ current: 0, total: 0 })
 
-      const response = await fetch('/api/update-xp?secret=mb_xp_update_secret_2025')
+      const response = await fetch('/api/update-xp')
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
@@ -262,7 +192,7 @@ export default function XPLeaderboard() {
           })
           
           // Auto-trigger retry after delay
-          console.log(`🔗 Auto-retry URL will be: /api/update-xp?secret=mb_xp_update_secret_2025&startFrom=${result.autoRetry.nextStartIndex}`)
+          console.log(`🔗 Auto-retry URL will be: /api/update-xp?startFrom=${result.autoRetry.nextStartIndex}`)
           
           setTimeout(async () => {
             console.log(`🔄 Auto-retry triggered for remaining ${result.autoRetry.remainingUsers} users from index ${result.autoRetry.nextStartIndex}`)
@@ -277,7 +207,7 @@ export default function XPLeaderboard() {
                 throw new Error(`Invalid nextStartIndex: ${nextIndex}`)
               }
               
-              const retryUrl = `/api/update-xp?secret=mb_xp_update_secret_2025&startFrom=${nextIndex}`
+              const retryUrl = `/api/update-xp?startFrom=${nextIndex}`
               console.log(`🌐 Fetching: ${retryUrl}`)
               
               const retryResponse = await fetch(retryUrl)
@@ -463,32 +393,6 @@ export default function XPLeaderboard() {
               Filters
             </button>
             <button
-              onClick={() => {
-                setShowPhoneCopyMode(!showPhoneCopyMode)
-                if (!showPhoneCopyMode) {
-                  setSelectedRows(new Set())
-                }
-              }}
-              className={cn(
-                "px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 flex items-center space-x-1 sm:space-x-2",
-                showPhoneCopyMode
-                  ? "bg-gradient-to-r from-purple-600 via-blue-600 to-purple-700 text-white shadow-lg shadow-purple-500/50 hover:shadow-purple-500/70 animate-pulse"
-                  : "bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-purple-600/20 hover:from-purple-500/30 hover:via-blue-500/30 hover:to-purple-600/30 text-purple-300 hover:text-purple-100 border border-purple-500/30 hover:border-purple-400/50"
-              )}
-            >
-              <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Copy Phone</span>
-            </button>
-            {showPhoneCopyMode && selectedRows.size > 0 && (
-              <button
-                onClick={handleCopyPhoneNumbers}
-                className="px-3 py-2 sm:px-4 sm:py-2 bg-gradient-to-r from-purple-600 via-blue-600 to-purple-700 text-white rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 flex items-center space-x-1 sm:space-x-2 hover:scale-105 shadow-lg shadow-purple-500/50 hover:shadow-purple-500/70"
-              >
-                <Copy className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span>Copy ({selectedRows.size})</span>
-              </button>
-            )}
-            <button
               onClick={() => fetchLeaderboard(true)}
               disabled={loading}
               className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors font-medium text-sm"
@@ -628,16 +532,6 @@ export default function XPLeaderboard() {
             <div className="min-w-full">
               {/* Header */}
               <div className="flex items-center gap-4 p-4 border-b border-border/50 bg-muted/20 text-sm font-semibold text-muted-foreground">
-                {showPhoneCopyMode && (
-                  <div className="w-8 flex-shrink-0 flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedRows.size === filteredLeaderboard.length && filteredLeaderboard.length > 0}
-                      onChange={(e) => handleSelectAll(e.target.checked)}
-                      className="w-4 h-4 text-primary bg-transparent border-border rounded focus:ring-primary focus:ring-2"
-                    />
-                  </div>
-                )}
                 <div className="w-16 flex-shrink-0">Rank</div>
                 <div className="w-32 flex-shrink-0">ID</div>
                 <div className="flex-1 min-w-0">Name</div>
@@ -656,16 +550,6 @@ export default function XPLeaderboard() {
                       getRankStyle(index + 1)
                     )}
                   >
-                    {showPhoneCopyMode && (
-                      <div className="w-8 flex-shrink-0 flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={selectedRows.has(entry.enrollment_id)}
-                          onChange={(e) => handleRowSelect(entry.enrollment_id, e.target.checked)}
-                          className="w-4 h-4 text-primary bg-transparent border-border rounded focus:ring-primary focus:ring-2"
-                        />
-                      </div>
-                    )}
                     <div className="w-16 flex-shrink-0 flex items-center gap-2">
                       {getRankIcon(index + 1)}
                       <span className="font-bold">{index + 1}</span>
@@ -757,7 +641,7 @@ export default function XPLeaderboard() {
           <div className="flex items-center space-x-3">
             {toastNotification.type === 'success' ? (
               <div className="w-5 h-5 rounded-full bg-green-500/30 flex items-center justify-center">
-                <Copy className="w-3 h-3 text-green-400" />
+                <Zap className="w-3 h-3 text-green-400" />
               </div>
             ) : (
               <div className="w-5 h-5 rounded-full bg-red-500/30 flex items-center justify-center">

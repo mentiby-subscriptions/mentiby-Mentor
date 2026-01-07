@@ -7,7 +7,7 @@ import LoadingAnimation from '@/components/LoadingAnimation'
 import { 
   ArrowLeft, Loader2, RefreshCw, Users, Home,
   CheckCircle2, XCircle, Award, TrendingUp, Calendar,
-  Sparkles, LogOut, UserCheck
+  Sparkles, LogOut, UserCheck, Trophy
 } from 'lucide-react'
 
 interface AttendanceData {
@@ -144,6 +144,13 @@ export default function YourAttendancePage() {
               >
                 <Award className="w-4 h-4 inline-block mr-2" />
                 Your Attendance
+              </button>
+              <button
+                onClick={() => router.push('/xp-leaderboard')}
+                className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
+              >
+                <Trophy className="w-4 h-4 inline-block mr-2" />
+                XP Leaderboard
               </button>
             </div>
 

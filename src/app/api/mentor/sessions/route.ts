@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const mentorId = searchParams.get('mentor_id')
     const days = parseInt(searchParams.get('days') || '5')
+    const offset = parseInt(searchParams.get('offset') || '0') // Days offset from today
 
     if (!mentorId) {
       return NextResponse.json({ error: 'Mentor ID is required' }, { status: 400 })
@@ -60,12 +61,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ sessions: [], todaySession: null })
     }
 
-    // Get dates for next N days
+    // Get dates for next N days starting from offset
     const dates: string[] = []
-    for (let i = 0; i < days; i++) {
+    for (let i = offset; i < offset + days; i++) {
       dates.push(getISTDateString(i))
     }
-    const todayDate = dates[0]
+    const todayDate = getISTDateString(0) // Always today for todaySession
 
     const allSessions: SessionData[] = []
 

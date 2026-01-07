@@ -6,7 +6,7 @@ import AuthWrapper from '@/components/auth/AuthWrapper'
 import { useAuth } from '@/contexts/AuthContext'
 import { 
   Users, ChevronRight, ChevronLeft, Loader2, RefreshCw, 
-  LogOut, Calendar, Sparkles, X, Clock, BookOpen, Award
+  LogOut, Calendar, Sparkles, X, Clock, BookOpen, Award, Trophy
 } from 'lucide-react'
 
 interface Batch {
@@ -312,6 +312,13 @@ function MyBatchesContent() {
                 <Award className="w-4 h-4 inline-block mr-2" />
                 Your Attendance
               </button>
+              <button
+                onClick={() => router.push('/xp-leaderboard')}
+                className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
+              >
+                <Trophy className="w-4 h-4 inline-block mr-2" />
+                XP Leaderboard
+              </button>
             </div>
           </div>
         </nav>
@@ -470,6 +477,13 @@ function MyBatchesContent() {
             >
               <Award className="w-4 h-4 inline-block mr-2" />
               Your Attendance
+            </button>
+            <button
+              onClick={() => router.push('/xp-leaderboard')}
+              className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
+            >
+              <Trophy className="w-4 h-4 inline-block mr-2" />
+              XP Leaderboard
             </button>
           </div>
         </div>

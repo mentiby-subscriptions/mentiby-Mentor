@@ -7,7 +7,7 @@ import AuthWrapper from '@/components/auth/AuthWrapper'
 import { 
   Calendar, Clock, Video, FileText,
   Users, LogOut, Loader2, RefreshCw,
-  BookOpen, Sparkles, Award
+  BookOpen, Sparkles, Award, Trophy, ChevronLeft, ChevronRight
 } from 'lucide-react'
 
 interface SessionData {
@@ -31,6 +31,7 @@ function HomePage() {
   const [todaySession, setTodaySession] = useState<SessionData | null>(null)
   const [loading, setLoading] = useState(true)
   const [dates, setDates] = useState<string[]>([])
+  const [dateOffset, setDateOffset] = useState(0) // For navigating through dates
 
   // Navigate to session details page
   const goToSession = (session: SessionData) => {
@@ -44,12 +45,12 @@ function HomePage() {
     router.push('/session')
   }
 
-  const fetchSessions = async () => {
+  const fetchSessions = async (offset = 0) => {
     if (!user?.mentorId) return
 
     setLoading(true)
     try {
-      const response = await fetch(`/api/mentor/sessions?mentor_id=${user.mentorId}&days=5`)
+      const response = await fetch(`/api/mentor/sessions?mentor_id=${user.mentorId}&days=5&offset=${offset}`)
       const data = await response.json()
 
       if (response.ok) {
@@ -66,17 +67,33 @@ function HomePage() {
   }
 
   useEffect(() => {
-    fetchSessions()
-  }, [user?.mentorId])
+    fetchSessions(dateOffset)
+  }, [user?.mentorId, dateOffset])
+
+  const navigateDates = (direction: 'prev' | 'next') => {
+    if (direction === 'prev') {
+      setDateOffset(prev => prev - 5)
+    } else if (direction === 'next') {
+      setDateOffset(prev => prev + 5)
+    }
+  }
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    
+    const inputDate = new Date(dateStr)
+    inputDate.setHours(0, 0, 0, 0)
+    
     return {
       day: date.toLocaleDateString('en-US', { weekday: 'short' }),
       date: date.getDate(),
       month: date.toLocaleDateString('en-US', { month: 'short' }),
-      isToday: dateStr === dates[0],
-      isTomorrow: dateStr === dates[1]
+      isToday: inputDate.getTime() === today.getTime(),
+      isTomorrow: inputDate.getTime() === tomorrow.getTime()
     }
   }
 
@@ -153,6 +170,13 @@ function HomePage() {
             >
               <Award className="w-4 h-4 inline-block mr-2" />
               Your Attendance
+            </button>
+            <button
+              onClick={() => router.push('/xp-leaderboard')}
+              className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
+            >
+              <Trophy className="w-4 h-4 inline-block mr-2" />
+              XP Leaderboard
             </button>
           </div>
         </div>
@@ -276,16 +300,31 @@ function HomePage() {
                   <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                     <BookOpen className="w-5 h-5 text-violet-400" />
                     Upcoming Schedule
+                    {dateOffset !== 0 && (
+                      <span className="text-xs text-slate-500 font-normal ml-2">
+                        ({dateOffset > 0 ? `+${dateOffset}` : dateOffset} days)
+                      </span>
+                    )}
                   </h3>
-                  <button
-                    onClick={fetchSessions}
-                    className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {dateOffset !== 0 && (
+                      <button
+                        onClick={() => setDateOffset(0)}
+                        className="px-2 py-1 text-xs text-violet-400 hover:text-violet-300 hover:bg-violet-500/10 rounded transition-colors"
+                      >
+                        Today
+                      </button>
+                    )}
+                    <button
+                      onClick={() => fetchSessions(dateOffset)}
+                      className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
-                {/* Calendar Grid */}
+                {/* Calendar Grid with Navigation */}
                 <div className="grid grid-cols-5 divide-x divide-white/5">
                   {dates.map((dateStr, index) => {
                     const { day, date, month, isToday, isTomorrow } = formatDate(dateStr)
@@ -355,6 +394,27 @@ function HomePage() {
                     )
                   })}
                 </div>
+              </div>
+              
+              {/* Navigation Arrows - Below calendar box */}
+              <div className="flex justify-center items-center gap-4 mt-4">
+                <button
+                  onClick={() => navigateDates('prev')}
+                  className="w-10 h-10 flex items-center justify-center rounded-full border-2 border-violet-500/50 bg-slate-900 hover:bg-violet-500/20 text-violet-400 hover:text-violet-300 hover:border-violet-400 transition-all shadow-lg hover:shadow-violet-500/20"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                
+                <span className="text-sm text-slate-400 min-w-[100px] text-center">
+                  {dateOffset === 0 ? 'This week' : dateOffset > 0 ? `+${dateOffset} days` : `${dateOffset} days`}
+                </span>
+                
+                <button
+                  onClick={() => navigateDates('next')}
+                  className="w-10 h-10 flex items-center justify-center rounded-full border-2 border-violet-500/50 bg-slate-900 hover:bg-violet-500/20 text-violet-400 hover:text-violet-300 hover:border-violet-400 transition-all shadow-lg hover:shadow-violet-500/20"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
               </div>
             </div>
           </div>

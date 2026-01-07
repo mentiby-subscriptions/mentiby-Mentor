@@ -17,11 +17,7 @@ const REQUEST_DELAY = 1000 // 1 second to avoid Codedamn API rate limits
 
 export async function GET(request: NextRequest) {
   try {
-    // Check authentication: either secret or Vercel cron
     const { searchParams } = new URL(request.url)
-    const secret = searchParams.get('secret')
-    const userAgent = request.headers.get('user-agent') || ''
-    const isVercelCron = userAgent.includes('vercel-cron')
     const startFromParam = searchParams.get('startFrom')
     let startFrom = 0
     
@@ -32,16 +28,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Allow if it's a Vercel cron request OR if secret matches
-    if (!isVercelCron && secret !== process.env.CRON_SECRET) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const isRetry = startFrom > 0
     console.log(`🔍 DEBUG: Raw startFrom = "${startFromParam}", parsed = ${startFrom}, isNaN = ${isNaN(startFrom)}`)
-    console.log(isVercelCron ? 'Starting XP update (Vercel Cron)...' : 
-               isRetry ? `Starting XP update (Auto-retry from user ${startFrom + 1})...` : 
-               'Starting XP update (Manual)...')
+    console.log(isRetry ? `Starting XP update (Retry from user ${startFrom + 1})...` : 'Starting XP update...')
 
     // Fetch all users from onboarding table
     const { data: users, error: usersError } = await supabase
@@ -245,7 +234,7 @@ export async function GET(request: NextRequest) {
       const nextStartIndex = results.processed
       
       console.log(`📅 Auto-retry needed for remaining ${results.remaining} users (starting from user ${nextStartIndex + 1})`)
-      console.log(`🔗 Retry URL: ${request.nextUrl.origin}/api/update-xp?secret=${secret}&startFrom=${nextStartIndex}`)
+      console.log(`🔗 Retry URL: ${request.nextUrl.origin}/api/update-xp?startFrom=${nextStartIndex}`)
       console.log(`🔍 DEBUG: nextStartIndex = ${nextStartIndex} (type: ${typeof nextStartIndex})`)
       
       retryScheduled = true

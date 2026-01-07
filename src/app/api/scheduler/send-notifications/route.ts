@@ -2,8 +2,156 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendEmail, generateStudentEmailHTML, generateMentorEmailHTML } from '@/lib/email'
 
-// This endpoint is called daily at 6:05 AM IST (via Vercel Cron) to send notifications
-// for ALL classes happening today
+// This endpoint is called daily at 9:00 AM IST (via Vercel Cron) to send notifications
+// for ALL classes happening today - sends both Email and WhatsApp messages
+
+// WhatsApp Cloud API Configuration
+const WHATSAPP_API_URL = 'https://graph.facebook.com/v19.0'
+
+// Format phone number for WhatsApp (must be E.164 format without +)
+function formatPhoneForWhatsApp(phone: string | null | undefined): string | null {
+  if (!phone) return null
+  
+  // Remove all non-digits
+  let cleaned = phone.replace(/\D/g, '')
+  
+  // Handle Indian numbers
+  if (cleaned.length === 10) {
+    // Add India country code
+    cleaned = '91' + cleaned
+  } else if (cleaned.startsWith('0')) {
+    // Remove leading 0 and add country code
+    cleaned = '91' + cleaned.substring(1)
+  } else if (cleaned.startsWith('+')) {
+    cleaned = cleaned.substring(1)
+  }
+  
+  // Validate length (should be 12 for Indian numbers: 91 + 10 digits)
+  if (cleaned.length < 10 || cleaned.length > 15) {
+    return null
+  }
+  
+  return cleaned
+}
+
+// Send WhatsApp template message
+async function sendWhatsAppMessage(params: {
+  to: string // Phone number in E.164 format (without +)
+  templateName: string
+  templateLanguage?: string
+  components?: any[] // Template components with variables
+}): Promise<boolean> {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+  
+  if (!phoneNumberId || !accessToken) {
+    console.log('WhatsApp not configured - skipping WhatsApp message')
+    return false
+  }
+  
+  try {
+    const url = `${WHATSAPP_API_URL}/${phoneNumberId}/messages`
+    
+    const body: any = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: params.to,
+      type: 'template',
+      template: {
+        name: params.templateName,
+        language: {
+          code: params.templateLanguage || 'en'
+        }
+      }
+    }
+    
+    // Add components if provided (for variable substitution)
+    if (params.components && params.components.length > 0) {
+      body.template.components = params.components
+    }
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.text()
+      console.error(`WhatsApp API error for ${params.to}:`, errorData)
+      return false
+    }
+    
+    const data = await response.json()
+    console.log(`✅ WhatsApp sent to ${params.to}, message_id: ${data.messages?.[0]?.id}`)
+    return true
+    
+  } catch (error: any) {
+    console.error(`WhatsApp send error for ${params.to}:`, error.message)
+    return false
+  }
+}
+
+// Build WhatsApp template components for student notification
+function buildStudentWhatsAppComponents(params: {
+  studentName: string
+  sessionDate: string
+  sessionTime: string
+  subjectName: string
+  subjectTopic: string
+  meetingLink: string
+  mentorName: string
+}): any[] {
+  // This matches a template like:
+  // "Hi {{1}}, you have a class on {{2}} at {{3}}. Subject: {{4}} - {{5}}. Mentor: {{6}}. Join: {{7}}"
+  return [
+    {
+      type: 'body',
+      parameters: [
+        { type: 'text', text: params.studentName },
+        { type: 'text', text: params.sessionDate },
+        { type: 'text', text: params.sessionTime },
+        { type: 'text', text: params.subjectName },
+        { type: 'text', text: params.subjectTopic || 'Session' },
+        { type: 'text', text: params.mentorName },
+        { type: 'text', text: params.meetingLink || 'Check Dashboard' }
+      ]
+    }
+  ]
+}
+
+// Build WhatsApp template components for mentor notification
+function buildMentorWhatsAppComponents(params: {
+  mentorName: string
+  cohortName: string
+  sessionDate: string
+  sessionTime: string
+  subjectName: string
+  subjectTopic: string
+  studentCount: number
+  meetingLink: string
+}): any[] {
+  // This matches a template like:
+  // "Hi {{1}}, reminder: You have a session for {{2}} on {{3}} at {{4}}. Topic: {{5}} - {{6}}. Students: {{7}}. Join: {{8}}"
+  return [
+    {
+      type: 'body',
+      parameters: [
+        { type: 'text', text: params.mentorName },
+        { type: 'text', text: params.cohortName },
+        { type: 'text', text: params.sessionDate },
+        { type: 'text', text: params.sessionTime },
+        { type: 'text', text: params.subjectName },
+        { type: 'text', text: params.subjectTopic || 'Session' },
+        { type: 'text', text: String(params.studentCount) },
+        { type: 'text', text: params.meetingLink || 'Check Dashboard' }
+      ]
+    }
+  ]
+}
 
 export async function POST(request: Request) {
   try {
@@ -84,14 +232,16 @@ export async function POST(request: Request) {
       }
     }
     
-    // Fallback if no cohorts found
+    // If no cohorts found in onboarding, return early
     if (Object.keys(cohortMapping).length === 0) {
-      console.log('No cohorts found in onboarding, using fallback')
-      Object.assign(cohortMapping, {
-        'Basic 1.0': 'basic1_0_schedule',
-        'Basic 1.1': 'basic1_1_schedule',
-        'Basic 2.0': 'basic2_0_schedule',
-        'Placement 2.0': 'placement2_0_schedule'
+      console.log('No active cohorts found in onboarding table')
+      return NextResponse.json({
+        success: true,
+        message: 'No active cohorts found in onboarding table',
+        emailsSent: 0,
+        mentorEmailsSent: 0,
+        whatsAppSent: 0,
+        mentorWhatsAppSent: 0
       })
     }
     
@@ -100,6 +250,12 @@ export async function POST(request: Request) {
     const results: any[] = []
     let totalEmailsSent = 0
     let totalMentorEmailsSent = 0
+    let totalWhatsAppSent = 0
+    let totalMentorWhatsAppSent = 0
+    
+    // WhatsApp template names (create these in Meta Business Manager)
+    const STUDENT_WA_TEMPLATE = process.env.WHATSAPP_STUDENT_TEMPLATE || 'class_reminder_student'
+    const MENTOR_WA_TEMPLATE = process.env.WHATSAPP_MENTOR_TEMPLATE || 'class_reminder_mentor'
 
     for (const [cohortKey, tableName] of Object.entries(cohortMapping)) {
       try {
@@ -126,8 +282,8 @@ export async function POST(request: Request) {
           if (!session.time) continue
           
           // Check if we already sent notification (prevent duplicates)
-          if (session.notification_sent) {
-            console.log(`Notification already sent for session ${session.id}`)
+          if (session.email_sent && session.whatsapp_sent) {
+            console.log(`Both notifications already sent for session ${session.id}`)
             continue
           }
 
@@ -169,38 +325,70 @@ export async function POST(request: Request) {
             console.log(`Session ${session.id} - mentor_id: ${session.mentor_id}, mentorName: ${mentorName}, mentorEmail: ${mentorEmail || 'NOT FOUND'}`)
 
             let studentEmailsSent = 0
+            let studentWhatsAppSent = 0
 
             for (const student of students) {
-              if (!student.Email) continue
+              const studentName = student['Full Name'] || 'Student'
+              
+              // Send Email
+              if (student.Email) {
+                const emailHtml = generateStudentEmailHTML({
+                  studentName,
+                  sessionDate,
+                  sessionTime,
+                  sessionDay: session.day || '',
+                  subjectName: session.subject_name || 'Session',
+                  subjectTopic: session.subject_topic || '',
+                  sessionType: session.session_type || 'Live Session',
+                  meetingLink: session.teams_meeting_link,
+                  mentorName
+                })
 
-              const emailHtml = generateStudentEmailHTML({
-                studentName: student['Full Name'] || 'Student',
-                sessionDate,
-                sessionTime,
-                sessionDay: session.day || '',
-                subjectName: session.subject_name || 'Session',
-                subjectTopic: session.subject_topic || '',
-                sessionType: session.session_type || 'Live Session',
-                meetingLink: session.teams_meeting_link,
-                mentorName
-              })
+                const sent = await sendEmail({
+                  to: student.Email,
+                  subject: `🎓 Upcoming Session: ${session.subject_name} - ${session.subject_topic}`,
+                  html: emailHtml
+                })
 
-              const sent = await sendEmail({
-                to: student.Email,
-                subject: `🎓 Upcoming Session: ${session.subject_name} - ${session.subject_topic}`,
-                html: emailHtml
-              })
-
-              if (sent) {
-                studentEmailsSent++
-                totalEmailsSent++
+                if (sent) {
+                  studentEmailsSent++
+                  totalEmailsSent++
+                }
               }
               
-              // Rate limit: wait 600ms between emails (max 2 per second on Resend free plan)
+              // Send WhatsApp
+              const studentPhone = formatPhoneForWhatsApp(student['Phone Number'] || student.Phone || student.phone)
+              if (studentPhone) {
+                const waComponents = buildStudentWhatsAppComponents({
+                  studentName,
+                  sessionDate,
+                  sessionTime,
+                  subjectName: session.subject_name || 'Session',
+                  subjectTopic: session.subject_topic || '',
+                  meetingLink: session.teams_meeting_link || 'Check Dashboard',
+                  mentorName
+                })
+                
+                const waSent = await sendWhatsAppMessage({
+                  to: studentPhone,
+                  templateName: STUDENT_WA_TEMPLATE,
+                  components: waComponents
+                })
+                
+                if (waSent) {
+                  studentWhatsAppSent++
+                  totalWhatsAppSent++
+                }
+              }
+              
+              // Rate limit: wait 600ms between messages (for both Resend and WhatsApp)
               await new Promise(resolve => setTimeout(resolve, 600))
             }
 
-            // Send email to mentor
+            // Send email and WhatsApp to mentor
+            const mentorData = mentorMap.get(session.mentor_id || 1)
+            const mentorPhone = formatPhoneForWhatsApp(mentorData?.['Phone Number'] || mentorData?.Phone || mentorData?.phone)
+            
             if (mentorEmail) {
               console.log(`Sending mentor email to: ${mentorEmail}`)
               const mentorEmailHtml = generateMentorEmailHTML({
@@ -233,15 +421,62 @@ export async function POST(request: Request) {
             } else {
               console.log(`⚠️ No mentor email found for session ${session.id} (mentor_id: ${session.mentor_id})`)
             }
+            
+            // Send WhatsApp to mentor
+            if (mentorPhone) {
+              console.log(`Sending mentor WhatsApp to: ${mentorPhone}`)
+              const mentorWaComponents = buildMentorWhatsAppComponents({
+                mentorName,
+                cohortName: cohortKey,
+                sessionDate,
+                sessionTime,
+                subjectName: session.subject_name || 'Session',
+                subjectTopic: session.subject_topic || '',
+                studentCount: students.length,
+                meetingLink: session.teams_meeting_link || 'Check Dashboard'
+              })
+              
+              const mentorWaSent = await sendWhatsAppMessage({
+                to: mentorPhone,
+                templateName: MENTOR_WA_TEMPLATE,
+                components: mentorWaComponents
+              })
+              
+              if (mentorWaSent) {
+                totalMentorWhatsAppSent++
+                console.log(`✅ Mentor WhatsApp sent successfully to ${mentorPhone}`)
+              } else {
+                console.log(`❌ Failed to send mentor WhatsApp to ${mentorPhone}`)
+              }
+              // Rate limit delay
+              await new Promise(resolve => setTimeout(resolve, 600))
+            } else {
+              console.log(`⚠️ No mentor phone found for session ${session.id}`)
+            }
 
-            // Mark notification as sent (if column exists)
+            // Mark notifications as sent separately
             try {
-              await supabaseB
-                .from(tableName)
-                .update({ notification_sent: true })
-                .eq('id', session.id)
+              const updateData: Record<string, boolean> = {}
+              
+              // Mark email_sent if at least one email was sent
+              if (studentEmailsSent > 0 || mentorEmail) {
+                updateData.email_sent = true
+              }
+              
+              // Mark whatsapp_sent if at least one WhatsApp was sent
+              if (studentWhatsAppSent > 0 || mentorPhone) {
+                updateData.whatsapp_sent = true
+              }
+              
+              if (Object.keys(updateData).length > 0) {
+                await supabaseB
+                  .from(tableName)
+                  .update(updateData)
+                  .eq('id', session.id)
+              }
             } catch (e) {
               // Column might not exist, that's ok
+              console.log('Could not update notification flags:', e)
             }
 
             results.push({
@@ -251,7 +486,9 @@ export async function POST(request: Request) {
               topic: session.subject_topic,
               time: session.time,
               studentEmailsSent,
-              mentorNotified: !!mentorEmail
+              studentWhatsAppSent,
+              mentorEmailSent: !!mentorEmail,
+              mentorWhatsAppSent: !!mentorPhone
             })
         }
 
@@ -264,8 +501,14 @@ export async function POST(request: Request) {
       success: true,
       timestamp: new Date().toISOString(),
       notificationDate: todayIST,
-      totalStudentEmailsSent: totalEmailsSent,
-      totalMentorEmailsSent,
+      email: {
+        studentsSent: totalEmailsSent,
+        mentorsSent: totalMentorEmailsSent
+      },
+      whatsapp: {
+        studentsSent: totalWhatsAppSent,
+        mentorsSent: totalMentorWhatsAppSent
+      },
       sessionsNotified: results.length,
       details: results
     })

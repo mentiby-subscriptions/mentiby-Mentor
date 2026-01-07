@@ -33,6 +33,9 @@ export interface SessionData {
   tableName: string
   meetingLink?: string
   mentorId: number
+  swappedMentorId?: number | null
+  isSwappedToMe?: boolean  // This session was swapped TO this mentor
+  isSwappedAway?: boolean  // This session was swapped AWAY from this mentor
 }
 
 export async function GET(request: NextRequest) {
@@ -70,21 +73,41 @@ export async function GET(request: NextRequest) {
     for (const table of tables) {
       const tableName = table.table_name
       const batchName = formatBatchName(tableName)
+      const mentorIdNum = parseInt(mentorId)
 
-      const { data: sessions, error: sessionError } = await supabaseB
+      // Query 1: Sessions where this mentor is the original mentor
+      const { data: originalSessions, error: originalError } = await supabaseB
         .from(tableName)
         .select('*')
-        .eq('mentor_id', parseInt(mentorId))
+        .eq('mentor_id', mentorIdNum)
         .in('date', dates)
         .order('date', { ascending: true })
 
-      if (sessionError) {
-        console.error(`Error querying ${tableName}:`, sessionError)
-        continue
+      if (originalError) {
+        console.error(`Error querying ${tableName} for original:`, originalError)
       }
 
-      if (sessions) {
-        for (const session of sessions) {
+      // Query 2: Sessions where this mentor is the swapped mentor
+      const { data: swappedSessions, error: swappedError } = await supabaseB
+        .from(tableName)
+        .select('*')
+        .eq('swapped_mentor_id', mentorIdNum)
+        .in('date', dates)
+        .order('date', { ascending: true })
+
+      if (swappedError) {
+        console.error(`Error querying ${tableName} for swapped:`, swappedError)
+      }
+
+      // Process original sessions
+      if (originalSessions) {
+        for (const session of originalSessions) {
+          // If swapped_mentor_id is set and it's not this mentor, this session is swapped away
+          const isSwappedAway = session.swapped_mentor_id && session.swapped_mentor_id !== mentorIdNum
+          
+          // Skip sessions that are swapped away (they'll show up for the swapped mentor)
+          if (isSwappedAway) continue
+
           allSessions.push({
             id: `${tableName}-${session.id || session.date}-${session.time}`,
             date: session.date,
@@ -95,8 +118,35 @@ export async function GET(request: NextRequest) {
             batchName,
             tableName,
             meetingLink: session.teams_meeting_link || session.meeting_link || session.teams_link || '',
-            mentorId: session.mentor_id
+            mentorId: session.mentor_id,
+            swappedMentorId: session.swapped_mentor_id,
+            isSwappedToMe: false,
+            isSwappedAway: false
           })
+        }
+      }
+
+      // Process swapped sessions (sessions swapped TO this mentor)
+      if (swappedSessions) {
+        for (const session of swappedSessions) {
+          // Only include if the original mentor is different
+          if (session.mentor_id !== mentorIdNum) {
+            allSessions.push({
+              id: `${tableName}-${session.id || session.date}-${session.time}-swapped`,
+              date: session.date,
+              day: session.day || '',
+              time: session.time || session.start_time || '',
+              subject: session.subject || session.subject_name || '',
+              topic: session.topic || session.subject_topic || '',
+              batchName,
+              tableName,
+              meetingLink: session.teams_meeting_link || session.meeting_link || session.teams_link || '',
+              mentorId: session.mentor_id,
+              swappedMentorId: session.swapped_mentor_id,
+              isSwappedToMe: true,
+              isSwappedAway: false
+            })
+          }
         }
       }
     }

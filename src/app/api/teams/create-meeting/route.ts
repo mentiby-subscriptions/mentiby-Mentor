@@ -190,12 +190,12 @@ export async function POST(request: Request) {
       })
     } else {
       // Legacy: Create standalone meeting (no chat)
-      const meeting = await createOnlineMeeting(accessToken, organizerUserId, {
-        subject,
-        startDateTime,
-        endDateTime,
-        timeZone
-      })
+    const meeting = await createOnlineMeeting(accessToken, organizerUserId, {
+      subject,
+      startDateTime,
+      endDateTime,
+      timeZone
+    })
       result = { ...meeting, eventId: null }
     }
 

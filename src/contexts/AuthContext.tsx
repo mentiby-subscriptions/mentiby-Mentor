@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Init auth error:', error)
       } finally {
         if (!isCancelled) {
-          setLoading(false)
+        setLoading(false)
         }
       }
     }
@@ -101,8 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Sign out error:', error)
     }
-    setUser(null)
-    setSession(null)
+            setUser(null)
+            setSession(null)
   }
 
   const refreshAuth = async () => {
@@ -111,13 +111,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data.session) {
         setSession(data.session)
         setUser(userToMentor(data.session.user))
-      } else {
+          } else {
         setSession(null)
-        setUser(null)
-      }
+          setUser(null)
+        }
     } catch (error) {
       console.error('Refresh auth error:', error)
-    }
+  }
   }
 
   if (!mounted) {
@@ -144,4 +144,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
-}
+} 

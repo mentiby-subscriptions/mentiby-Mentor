@@ -148,3 +148,43 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// PUT endpoint to replace/update all materials (used for deletion)
+export async function PUT(request: NextRequest) {
+  try {
+    const { tableName, date, time, materials } = await request.json()
+
+    if (!tableName || !date || !time) {
+      return NextResponse.json(
+        { error: 'Table name, date, and time are required' },
+        { status: 400 }
+      )
+    }
+
+    // Update the session with the new materials string
+    const { error: updateError } = await supabaseB
+      .from(tableName)
+      .update({ initial_session_material: materials || '' })
+      .eq('date', date)
+      .eq('time', time)
+
+    if (updateError) {
+      console.error('Error updating session material:', updateError)
+      return NextResponse.json(
+        { error: 'Failed to update session material' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Session material updated successfully'
+    })
+
+  } catch (error: any) {
+    console.error('Update session material error:', error)
+    return NextResponse.json(
+      { error: 'Something went wrong' },
+      { status: 500 }
+    )
+  }
+}

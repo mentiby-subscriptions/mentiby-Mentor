@@ -753,7 +753,7 @@ export async function POST(request: Request) {
             const startDate = new Date(`${session.date}T${sessionTime}`)
             startDate.setMinutes(startDate.getMinutes() + 90)
             const endDateTime = startDate.toISOString()
-            
+
             // Combine mentor + all students as attendees
             const attendees: string[] = []
             if (mentorEmail) {
@@ -769,10 +769,10 @@ export async function POST(request: Request) {
             try {
               // Try calendar event first (creates chat automatically)
               meetingLink = await createTeamsMeetingWithChat(
-                accessToken,
-                subject,
-                new Date(`${session.date}T${sessionTime}`).toISOString(),
-                endDateTime,
+              accessToken,
+              subject,
+              new Date(`${session.date}T${sessionTime}`).toISOString(),
+              endDateTime,
                 attendees
               )
             } catch (calendarError: any) {
@@ -783,7 +783,7 @@ export async function POST(request: Request) {
                 subject,
                 new Date(`${session.date}T${sessionTime}`).toISOString(),
                 endDateTime
-              )
+            )
             }
 
             // Update the session with the meeting link

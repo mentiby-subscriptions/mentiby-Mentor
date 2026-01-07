@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import AuthWrapper from '@/components/auth/AuthWrapper'
 import { 
   Calendar, Clock, Video, FileText,
-  Users, Edit3, LogOut, Loader2, RefreshCw,
+  Users, LogOut, Loader2, RefreshCw,
   BookOpen, Sparkles
 } from 'lucide-react'
 
@@ -20,6 +20,7 @@ interface SessionData {
   batchName: string
   tableName: string
   meetingLink?: string
+  isSwappedToMe?: boolean
 }
 
 function HomePage() {
@@ -146,13 +147,6 @@ function HomePage() {
               <Users className="w-4 h-4 inline-block mr-2" />
               My Batches
             </button>
-            <button
-              onClick={() => router.push('/edit-sessions')}
-              className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
-            >
-              <Edit3 className="w-4 h-4 inline-block mr-2" />
-              Edit Sessions
-            </button>
           </div>
         </div>
       </nav>
@@ -186,11 +180,22 @@ function HomePage() {
 
                 {todaySession ? (
                   <div className="space-y-4">
-                    <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+                    <div className={`rounded-xl p-4 border ${
+                      todaySession.isSwappedToMe 
+                        ? 'bg-purple-500/10 border-purple-500/30' 
+                        : 'bg-slate-800/50 border-slate-700/50'
+                    }`}>
                       <div className="flex items-start justify-between mb-3">
-                        <span className="px-2 py-1 bg-violet-500/20 text-violet-300 text-xs rounded-md font-medium">
-                          {todaySession.batchName}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-1 bg-violet-500/20 text-violet-300 text-xs rounded-md font-medium">
+                            {todaySession.batchName}
+                          </span>
+                          {todaySession.isSwappedToMe && (
+                            <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-md font-medium">
+                              SWAPPED
+                            </span>
+                          )}
+                        </div>
                         <span className={`text-sm font-mono ${getTimeColor(todaySession.time)}`}>
                           {todaySession.time || 'TBD'}
                         </span>
@@ -298,13 +303,22 @@ function HomePage() {
                               <div
                                 key={session.id}
                                 onClick={() => goToSession(session)}
-                                className="group p-2 sm:p-2.5 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-violet-500/30 rounded-lg sm:rounded-xl transition-all cursor-pointer"
+                                className={`group p-2 sm:p-2.5 hover:bg-slate-800 border rounded-lg sm:rounded-xl transition-all cursor-pointer ${
+                                  session.isSwappedToMe 
+                                    ? 'bg-purple-500/10 border-purple-500/30 hover:border-purple-500/50' 
+                                    : 'bg-slate-800/50 border-slate-700/50 hover:border-violet-500/30'
+                                }`}
                               >
                                 <div className="flex items-center gap-1 mb-1">
                                   <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-500" />
                                   <span className={`text-[10px] sm:text-xs font-mono ${getTimeColor(session.time)}`}>
                                     {session.time || 'TBD'}
                                   </span>
+                                  {session.isSwappedToMe && (
+                                    <span className="ml-auto px-1 py-0.5 bg-purple-500/20 text-purple-300 text-[8px] rounded font-medium">
+                                      SWAP
+                                    </span>
+                                  )}
                                 </div>
                                 <p className="text-white text-[10px] sm:text-xs font-medium line-clamp-2 mb-1 group-hover:text-violet-300 transition-colors">
                                   {session.subject}

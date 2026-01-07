@@ -26,8 +26,10 @@ BEGIN
       session_material TEXT,
       session_recording TEXT,
       mentor_id INTEGER,
+      swapped_mentor_id INTEGER,
       teams_meeting_link TEXT,
-      notification_sent BOOLEAN DEFAULT FALSE,
+      email_sent BOOLEAN DEFAULT FALSE,
+      whatsapp_sent BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )', table_name);
 END;
@@ -41,4 +43,5 @@ GRANT EXECUTE ON FUNCTION create_cohort_schedule_table(TEXT) TO service_role;
 -- After running this, your Cohort Initiator will:
 -- 1. Auto-create tables with mentor_id column
 -- 2. Assign mentor to all "live session" rows
+-- 3. Track email and WhatsApp notifications separately
 -- ============================================

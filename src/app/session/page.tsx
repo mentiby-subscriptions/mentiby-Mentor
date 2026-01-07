@@ -8,7 +8,7 @@ import {
   Calendar, Clock, Video, FileText, ArrowLeft, ArrowRight,
   Users, LogOut, Loader2, RefreshCw, Sparkles, Link2, Plus,
   Trash2, Check, ExternalLink, ChevronLeft,
-  BookOpen, AlertCircle, Upload
+  BookOpen, AlertCircle, Upload, X, Repeat
 } from 'lucide-react'
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -28,8 +28,15 @@ interface SessionDetails {
   session_material: string
   session_recording: string
   mentor_id: number
+  swapped_mentor_id: number | null
   teams_meeting_link: string
   materialLinks: string[]
+}
+
+interface Mentor {
+  id: number
+  name: string
+  email: string
 }
 
 interface ScheduleRow {
@@ -126,12 +133,89 @@ function SessionDetailsPage() {
   const [newLinks, setNewLinks] = useState<string[]>([''])
   const [savingMaterial, setSavingMaterial] = useState(false)
   const [materialSuccess, setMaterialSuccess] = useState(false)
+  const [deletingMaterialIndex, setDeletingMaterialIndex] = useState<number | null>(null)
   
   // Reschedule state - copied from CohortScheduleEditor
   const [showReschedule, setShowReschedule] = useState<'postpone' | 'prepone' | null>(null)
   const [newDateForMove, setNewDateForMove] = useState<string>('')
   const [newTimeForMove, setNewTimeForMove] = useState<string>('')
   const [isMovingSession, setIsMovingSession] = useState(false)
+
+  // Mentor swap state
+  const [showSwapMentor, setShowSwapMentor] = useState(false)
+  const [mentors, setMentors] = useState<Mentor[]>([])
+  const [selectedMentorId, setSelectedMentorId] = useState<number | null>(null)
+  const [isSwappingMentor, setIsSwappingMentor] = useState(false)
+  const [loadingMentors, setLoadingMentors] = useState(false)
+
+  // Fetch all mentors
+  const fetchMentors = async () => {
+    setLoadingMentors(true)
+    try {
+      const response = await fetch('/api/mentors')
+      const data = await response.json()
+      if (response.ok) {
+        setMentors(data.mentors || [])
+      }
+    } catch (err) {
+      console.error('Error fetching mentors:', err)
+    } finally {
+      setLoadingMentors(false)
+    }
+  }
+
+  // Handle mentor swap
+  const handleSwapMentor = async () => {
+    if (!session || !tableName) return
+
+    setIsSwappingMentor(true)
+    try {
+      const response = await fetch('/api/session/swap-mentor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableName,
+          sessionId: session.id,
+          swappedMentorId: selectedMentorId,
+          swappedByName: user?.name || 'Unknown'
+        })
+      })
+
+      const data = await response.json()
+      if (response.ok) {
+        // Refresh session data
+        await fetchSession()
+        setShowSwapMentor(false)
+        setSelectedMentorId(null)
+      } else {
+        alert(data.error || 'Failed to swap mentor')
+      }
+    } catch (err) {
+      console.error('Error swapping mentor:', err)
+      alert('Failed to swap mentor')
+    } finally {
+      setIsSwappingMentor(false)
+    }
+  }
+
+  // Open swap modal
+  const openSwapMentorModal = () => {
+    setShowSwapMentor(true)
+    setSelectedMentorId(session?.swapped_mentor_id || null)
+    if (mentors.length === 0) {
+      fetchMentors()
+    }
+  }
+
+  // Get current mentor name (either swapped or original)
+  const getCurrentMentorName = () => {
+    if (session?.swapped_mentor_id) {
+      const swappedMentor = mentors.find(m => m.id === session.swapped_mentor_id)
+      return swappedMentor?.name || `Mentor #${session.swapped_mentor_id}`
+    }
+    const originalMentor = mentors.find(m => m.id === session?.mentor_id)
+    return originalMentor?.name || user?.name || 'Unknown'
+  }
 
   // Fetch all sessions for the table (needed for date range calculation)
   const fetchAllSessions = async () => {
@@ -182,6 +266,13 @@ function SessionDetailsPage() {
     }
   }, [pageData])
 
+  // Fetch mentors when session loads (if there's a swapped mentor)
+  useEffect(() => {
+    if (session?.swapped_mentor_id && mentors.length === 0) {
+      fetchMentors()
+    }
+  }, [session?.swapped_mentor_id])
+
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr)
     return d.toLocaleDateString('en-IN', { 
@@ -199,6 +290,18 @@ function SessionDetailsPage() {
     const ampm = h >= 12 ? 'PM' : 'AM'
     const hour12 = h % 12 || 12
     return `${hour12}:${minutes} ${ampm}`
+  }
+
+  // Check if session start time has passed
+  const isSessionStarted = () => {
+    if (!session) return false
+    const sessionDate = session.date?.split('T')[0]
+    const sessionTime = session.time?.substring(0, 5) || '00:00'
+    if (!sessionDate) return false
+    
+    const sessionDateTime = new Date(`${sessionDate}T${sessionTime}:00`)
+    const now = new Date()
+    return now >= sessionDateTime
   }
 
   // Transform Graph API recording URL to our streaming endpoint
@@ -255,6 +358,41 @@ function SessionDetailsPage() {
       console.error('Error saving material:', err)
     } finally {
       setSavingMaterial(false)
+    }
+  }
+
+  const handleDeleteMaterial = async (indexToDelete: number) => {
+    if (!session || !tableName) return
+    
+    const confirmDelete = confirm('Are you sure you want to delete this material?')
+    if (!confirmDelete) return
+
+    setDeletingMaterialIndex(indexToDelete)
+    try {
+      // Get remaining links after removing the one at indexToDelete
+      const remainingLinks = session.materialLinks.filter((_, idx) => idx !== indexToDelete)
+      
+      const response = await fetch('/api/mentor/session-material', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableName,
+          date,
+          time,
+          materials: remainingLinks.join(',')
+        })
+      })
+
+      if (response.ok) {
+        await fetchSession()
+      } else {
+        alert('Failed to delete material')
+      }
+    } catch (err) {
+      console.error('Error deleting material:', err)
+      alert('Failed to delete material')
+    } finally {
+      setDeletingMaterialIndex(null)
     }
   }
 
@@ -459,69 +597,47 @@ function SessionDetailsPage() {
     setIsMovingSession(true)
 
     try {
-      // Get the new day name
-      const dateObj = new Date(effectiveDate + 'T12:00:00')
-      const dayName = DAYS_OF_WEEK[dateObj.getDay()]
-
-      // Update via API
-      const response = await fetch('/api/cohort/schedule', {
-        method: 'PATCH',
+      // Call the new reschedule API which handles DB updates + notifications
+      const response = await fetch('/api/session/reschedule', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tableName,
-          id: session.id,
-          field: 'date',
-          value: effectiveDate
+          sessionId: session.id,
+          originalDate: currentDate,
+          originalTime: currentTime,
+          newDate: effectiveDate,
+          newTime: timeChanged ? effectiveTime : null,
+          actionType: type,
+          mentorName: user?.name || 'A Mentor'
         })
       })
+
+      const data = await response.json()
 
       if (!response.ok) {
-        throw new Error('Failed to update date')
+        throw new Error(data.error || 'Failed to reschedule')
       }
 
-      // Update day
-      await fetch('/api/cohort/schedule', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tableName,
-          id: session.id,
-          field: 'day',
-          value: dayName
-        })
-      })
-
-      // Clear meeting link
-      await fetch('/api/cohort/schedule', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tableName,
-          id: session.id,
-          field: 'teams_meeting_link',
-          value: null
-        })
-      })
-
-      // Update time if changed
-      if (timeChanged) {
-        await fetch('/api/cohort/schedule', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tableName,
-            id: session.id,
-            field: 'time',
-            value: effectiveTime
-          })
-        })
-      }
+      console.log('Reschedule result:', data)
 
       // Navigate to the new session page
-      router.replace(`/session?table=${tableName}&date=${effectiveDate}&time=${effectiveTime}&batch=${encodeURIComponent(batchName)}`)
+      sessionStorage.setItem('sessionPageData', JSON.stringify({
+        table: tableName,
+        date: effectiveDate,
+        time: effectiveTime,
+        batch: batchName,
+        from: pageData?.from || 'home'
+      }))
+      router.replace('/session')
       setShowReschedule(null)
       setNewDateForMove('')
       setNewTimeForMove('')
+
+      // Refresh the page data
+      setTimeout(() => {
+        window.location.reload()
+      }, 100)
 
     } catch (err: any) {
       console.error(`Error ${type}ing session:`, err)
@@ -688,30 +804,36 @@ function SessionDetailsPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <button
             onClick={() => {
               setShowReschedule('prepone')
               setNewDateForMove('')
               setNewTimeForMove('')
             }}
-            className="flex items-center justify-center gap-3 px-4 py-4 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-400 rounded-xl transition-all group"
+            className="flex items-center justify-center gap-2 px-3 py-3 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-400 rounded-xl transition-all group"
           >
-            <div className="p-2 rounded-lg bg-cyan-500/10 group-hover:bg-cyan-500/20 transition-colors">
-              <ArrowLeft className="w-5 h-5" />
-            </div>
-            <span className="font-medium">Prepone</span>
+            <ArrowLeft className="w-4 h-4" />
+            <span className="font-medium text-sm">Prepone</span>
           </button>
           
           <button
             onClick={handleUploadAttendance}
-            className="flex items-center justify-center gap-3 px-4 py-4 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 hover:border-blue-500/50 text-blue-400 rounded-xl transition-all group"
+            className="flex items-center justify-center gap-2 px-3 py-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 hover:border-blue-500/50 text-blue-400 rounded-xl transition-all group"
           >
-            <div className="p-2 rounded-lg bg-blue-500/10 group-hover:bg-blue-500/20 transition-colors">
-              <Upload className="w-5 h-5" />
-            </div>
-            <span className="font-medium">Upload Attendance</span>
+            <Upload className="w-4 h-4" />
+            <span className="font-medium text-sm">Attendance</span>
           </button>
+
+          {!isSessionStarted() && (
+            <button
+              onClick={openSwapMentorModal}
+              className="flex items-center justify-center gap-2 px-3 py-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 text-purple-400 rounded-xl transition-all group"
+            >
+              <Users className="w-4 h-4" />
+              <span className="font-medium text-sm">Swap Mentor</span>
+            </button>
+          )}
           
           <button
             onClick={() => {
@@ -719,14 +841,44 @@ function SessionDetailsPage() {
               setNewDateForMove('')
               setNewTimeForMove('')
             }}
-            className="flex items-center justify-center gap-3 px-4 py-4 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 hover:border-orange-500/50 text-orange-400 rounded-xl transition-all group"
+            className="flex items-center justify-center gap-2 px-3 py-3 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 hover:border-orange-500/50 text-orange-400 rounded-xl transition-all group"
           >
-            <span className="font-medium">Postpone</span>
-            <div className="p-2 rounded-lg bg-orange-500/10 group-hover:bg-orange-500/20 transition-colors">
-              <ArrowRight className="w-5 h-5" />
-            </div>
+            <span className="font-medium text-sm">Postpone</span>
+            <ArrowRight className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Swapped Mentor Indicator */}
+        {session?.swapped_mentor_id && (
+          <div className="mb-6 p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-500/20 rounded-lg">
+                  <Users className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-purple-300 text-sm font-medium">Mentor Swapped</p>
+                  <p className="text-purple-400 text-xs">
+                    Assigned to: <span className="font-semibold text-purple-300">
+                      {loadingMentors ? 'Loading...' : (mentors.find(m => m.id === session.swapped_mentor_id)?.name || `Mentor #${session.swapped_mentor_id}`)}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              {!isSessionStarted() && (
+                <button
+                  onClick={() => {
+                    setSelectedMentorId(null)
+                    handleSwapMentor()
+                  }}
+                  className="px-3 py-1.5 text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg transition-colors"
+                >
+                  Remove Swap
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Reschedule Modal - copied from CohortScheduleEditor */}
         {showReschedule && (
@@ -888,6 +1040,107 @@ function SessionDetailsPage() {
           </div>
         )}
 
+        {/* Swap Mentor Modal */}
+        {showSwapMentor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowSwapMentor(false)} />
+            <div className="relative w-full max-w-md bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden">
+              {/* Modal Header */}
+              <div className="px-6 py-5 border-b border-slate-700/50 bg-gradient-to-r from-purple-500/10 to-pink-500/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-purple-500/10">
+                      <Users className="h-6 w-6 text-purple-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Swap Mentor</h3>
+                      <p className="text-sm text-slate-400">Assign this class to a different mentor</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowSwapMentor(false)}
+                    className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 space-y-4">
+                {/* Current Assignment */}
+                <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                  <p className="text-slate-400 text-sm mb-1">Current Mentor</p>
+                  <p className="text-white font-medium">{user?.name || 'Unknown'}</p>
+                  {session?.swapped_mentor_id && (
+                    <p className="text-purple-400 text-xs mt-1">
+                      Currently swapped to: {mentors.find(m => m.id === session.swapped_mentor_id)?.name || `Mentor #${session.swapped_mentor_id}`}
+                    </p>
+                  )}
+                </div>
+
+                {/* Mentor Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Select New Mentor
+                  </label>
+                  {loadingMentors ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedMentorId || ''}
+                      onChange={(e) => setSelectedMentorId(e.target.value ? Number(e.target.value) : null)}
+                      className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50"
+                    >
+                      <option value="">Select a mentor...</option>
+                      {mentors
+                        .filter(m => m.id !== session?.mentor_id) // Exclude original mentor
+                        .map(mentor => (
+                          <option key={mentor.id} value={mentor.id} className="bg-slate-800">
+                            {mentor.name} ({mentor.email})
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Note */}
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                  <p className="text-amber-300 text-xs">
+                    ⚠️ Swapping mentor will only affect this session. The original mentor assignment remains unchanged.
+                  </p>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-4 border-t border-slate-700/50 bg-slate-800/30 flex gap-3">
+                <button
+                  onClick={() => setShowSwapMentor(false)}
+                  className="flex-1 px-4 py-2.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSwapMentor}
+                  disabled={!selectedMentorId || isSwappingMentor}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isSwappingMentor ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Swapping...
+                    </>
+                  ) : (
+                    'Confirm Swap'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Session Materials Section */}
         <div className="bg-slate-900/50 border border-white/5 rounded-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-white/5">
@@ -904,17 +1157,33 @@ function SessionDetailsPage() {
                 <p className="text-sm font-medium text-slate-300 mb-3">Added Materials</p>
                 <div className="space-y-2">
                   {session.materialLinks.map((link, index) => (
-                    <a
+                    <div
                       key={index}
-                      href={link.startsWith('http') ? link : `https://${link}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-blue-400 hover:text-blue-300 hover:border-blue-500/30 transition-colors group"
+                      className="flex items-center gap-2"
                     >
-                      <Link2 className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate flex-1">{link}</span>
-                      <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </a>
+                      <a
+                        href={link.startsWith('http') ? link : `https://${link}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 flex items-center gap-3 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-blue-400 hover:text-blue-300 hover:border-blue-500/30 transition-colors group"
+                      >
+                        <Link2 className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate flex-1">{link}</span>
+                        <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </a>
+                      <button
+                        onClick={() => handleDeleteMaterial(index)}
+                        disabled={deletingMaterialIndex === index}
+                        className="p-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-400 rounded-xl transition-colors disabled:opacity-50"
+                        title="Delete material"
+                      >
+                        {deletingMaterialIndex === index ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>

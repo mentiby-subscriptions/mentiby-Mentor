@@ -131,23 +131,23 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           {/* Content */}
           {!linkSent ? (
             <form onSubmit={handleSendLink} className="relative space-y-6">
-              <div>
+            <div>
                 <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-                  Email Address
-                </label>
+                Email Address
+              </label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Mail className="h-5 w-5 text-slate-500 group-focus-within:text-violet-400 transition-colors" />
-                  </div>
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
+                </div>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
                     className="block w-full pl-12 pr-4 py-3.5 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all duration-200"
                     placeholder="mentor@example.com"
-                  />
+                />
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
                   Enter your registered mentor email
@@ -184,7 +184,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
                   Hi <span className="text-violet-400 font-medium">{mentorName}</span>, we sent a login link to
                 </p>
                 <p className="text-white font-medium mt-1">{email}</p>
-              </div>
+            </div>
 
               {/* Instructions */}
               <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-4 space-y-3">
@@ -256,4 +256,4 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       </div>
     </div>
   )
-}
+} 

@@ -6,7 +6,7 @@ import AuthWrapper from '@/components/auth/AuthWrapper'
 import { useAuth } from '@/contexts/AuthContext'
 import { 
   Users, ChevronRight, ChevronLeft, Loader2, RefreshCw, 
-  LogOut, Calendar, Edit3, Sparkles, X, Clock, BookOpen
+  LogOut, Calendar, Sparkles, X, Clock, BookOpen
 } from 'lucide-react'
 
 interface Batch {
@@ -21,6 +21,7 @@ interface Session {
   time: string
   subject_name: string
   mentor_id: string
+  swapped_mentor_id?: number | null
   teams_meeting_link?: string
 }
 
@@ -200,10 +201,17 @@ function MyBatchesContent() {
               <button
                 key={idx}
                 onClick={() => handleSessionClick(session)}
-                className="w-full text-left px-1.5 sm:px-2 py-1 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 rounded text-[10px] sm:text-xs text-emerald-300 truncate transition-colors border border-emerald-500/20 hover:border-emerald-500/40"
+                className={`w-full text-left px-1.5 sm:px-2 py-1 rounded text-[10px] sm:text-xs truncate transition-colors border ${
+                  session.swapped_mentor_id
+                    ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 text-purple-300 border-purple-500/20 hover:border-purple-500/40'
+                    : 'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 text-emerald-300 border-emerald-500/20 hover:border-emerald-500/40'
+                }`}
               >
                 <span className="font-medium">{session.time?.slice(0, 5)}</span>
-                <span className="text-emerald-400/70 ml-1 hidden sm:inline">• {session.subject_name}</span>
+                {session.swapped_mentor_id && (
+                  <span className="ml-1 text-purple-400">⇄</span>
+                )}
+                <span className={`ml-1 hidden sm:inline ${session.swapped_mentor_id ? 'text-purple-400/70' : 'text-emerald-400/70'}`}>• {session.subject_name}</span>
               </button>
             ))}
           </div>
@@ -297,13 +305,6 @@ function MyBatchesContent() {
                 <Users className="w-4 h-4 inline-block mr-2" />
                 My Batches
               </button>
-              <button
-                onClick={() => router.push('/edit-sessions')}
-                className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
-              >
-                <Edit3 className="w-4 h-4 inline-block mr-2" />
-                Edit Sessions
-              </button>
             </div>
           </div>
         </nav>
@@ -341,7 +342,11 @@ function MyBatchesContent() {
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500/50" />
-              <span className="text-slate-400">Has Session</span>
+              <span className="text-slate-400">Session</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-purple-500/30 border border-purple-500/50" />
+              <span className="text-slate-400">Swapped ⇄</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded bg-slate-900/30 border border-white/5" />
@@ -442,13 +447,6 @@ function MyBatchesContent() {
             >
               <Users className="w-4 h-4 inline-block mr-2" />
               My Batches
-            </button>
-            <button
-              onClick={() => router.push('/edit-sessions')}
-              className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
-            >
-              <Edit3 className="w-4 h-4 inline-block mr-2" />
-              Edit Sessions
             </button>
           </div>
         </div>

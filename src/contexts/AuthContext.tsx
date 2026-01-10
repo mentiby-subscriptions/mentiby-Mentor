@@ -114,12 +114,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabaseB.auth.onAuthStateChange(async (event, newSession) => {
       if (isCancelled) return
       
-      console.log('Auth event:', event)
-      console.log('User metadata:', newSession?.user?.user_metadata)
-      
       // Check role on sign in
       if (newSession && !hasValidRole(newSession.user)) {
-        console.warn('User does not have mentor role, signing out. Metadata:', newSession.user?.user_metadata)
         await supabaseB.auth.signOut()
         setSession(null)
         setUser(null)

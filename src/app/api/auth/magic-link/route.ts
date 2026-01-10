@@ -7,9 +7,27 @@ const supabaseB = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY_B!
 )
 
+// Hardcoded access password for mentor dashboard
+const MENTOR_ACCESS_PASSWORD = 'Createimpact@4468'
+
 export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json()
+    const { email, password } = await request.json()
+
+    // Validate password first
+    if (!password) {
+      return NextResponse.json(
+        { error: 'Access password is required' },
+        { status: 400 }
+      )
+    }
+
+    if (password !== MENTOR_ACCESS_PASSWORD) {
+      return NextResponse.json(
+        { error: 'Credentials not matched' },
+        { status: 401 }
+      )
+    }
 
     if (!email) {
       return NextResponse.json(
@@ -29,8 +47,8 @@ export async function POST(request: NextRequest) {
 
     if (mentorError || !mentor) {
       return NextResponse.json(
-        { error: 'Only registered mentors can access this dashboard.' },
-        { status: 404 }
+        { error: 'Credentials not matched' },
+        { status: 401 }
       )
     }
 

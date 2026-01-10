@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Mail, Shield, AlertCircle, CheckCircle, Loader2, ExternalLink } from 'lucide-react'
+import { Mail, Shield, AlertCircle, CheckCircle, Loader2, ExternalLink, Lock } from 'lucide-react'
 import { authService } from '@/lib/auth'
 
 interface LoginFormProps {
@@ -10,6 +10,7 @@ interface LoginFormProps {
 
 export default function LoginForm({ onSuccess }: LoginFormProps) {
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [mentorName, setMentorName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -35,7 +36,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     setIsLoading(true)
 
     try {
-      const { data, error: sendError } = await authService.sendMagicLink(email)
+      const { data, error: sendError } = await authService.sendMagicLink(email, password)
 
       if (sendError || !data) {
         setError(sendError || 'Failed to send verification link')
@@ -59,7 +60,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     setIsLoading(true)
 
     try {
-      const { data, error: sendError } = await authService.sendMagicLink(email)
+      const { data, error: sendError } = await authService.sendMagicLink(email, password)
 
       if (sendError || !data) {
         setError(sendError || 'Failed to resend verification link')
@@ -78,6 +79,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     setLinkSent(false)
     setError(null)
     setMentorName('')
+    setPassword('')
   }
 
   if (!isClient) return null
@@ -154,9 +156,38 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
                 </p>
               </div>
 
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
+                  Access Password
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-slate-500 group-focus-within:text-violet-400 transition-colors" />
+                  </div>
+                  <input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-form-type="other"
+                    className="block w-full pl-12 pr-4 py-3.5 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all duration-200"
+                    placeholder="Enter access password"
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  Contact admin if you don&apos;t have the password
+                </p>
+              </div>
+
               <button
                 type="submit"
-                disabled={isLoading || !email}
+                disabled={isLoading || !email || !password}
                 className="group w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-slate-700 disabled:to-slate-700 text-white font-semibold py-3.5 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] disabled:scale-100 disabled:cursor-not-allowed shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 disabled:shadow-none flex items-center justify-center gap-2"
               >
                 {isLoading ? (
@@ -250,7 +281,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         <div className="mt-6 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900/50 border border-slate-800/50 rounded-full">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-            <span className="text-slate-500 text-xs">Secured with Supabase Auth</span>
+            <span className="text-slate-500 text-xs">Secured with Techsas Auth</span>
           </div>
         </div>
       </div>

@@ -44,9 +44,21 @@ function userToMentor(user: User | null): MentorUser | null {
 }
 
 // Check if user has the correct role for this dashboard
+// Allow access if: role is 'mentor' OR mentor_id exists (backward compatibility)
+// Deny access only if role is explicitly set to something other than 'mentor'
 function hasValidRole(user: User | null): boolean {
   if (!user) return false
-  return user.user_metadata?.role === REQUIRED_ROLE
+  
+  const role = user.user_metadata?.role
+  const mentorId = user.user_metadata?.mentor_id
+  
+  // If role is explicitly set to something other than 'mentor', deny
+  if (role && role !== REQUIRED_ROLE) {
+    return false
+  }
+  
+  // Allow if role is 'mentor' OR if mentor_id exists (old users without role)
+  return role === REQUIRED_ROLE || mentorId !== undefined
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -103,10 +115,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isCancelled) return
       
       console.log('Auth event:', event)
+      console.log('User metadata:', newSession?.user?.user_metadata)
       
       // Check role on sign in
       if (newSession && !hasValidRole(newSession.user)) {
-        console.warn('User does not have mentor role, signing out')
+        console.warn('User does not have mentor role, signing out. Metadata:', newSession.user?.user_metadata)
         await supabaseB.auth.signOut()
         setSession(null)
         setUser(null)

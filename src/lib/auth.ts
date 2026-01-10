@@ -16,12 +16,12 @@ interface SendMagicLinkResponse {
 
 export const authService = {
   // Send magic link to mentor email
-  async sendMagicLink(email: string): Promise<{ data: SendMagicLinkResponse | null; error: string | null }> {
+  async sendMagicLink(email: string, password: string): Promise<{ data: SendMagicLinkResponse | null; error: string | null }> {
     try {
       const response = await fetch('/api/auth/magic-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email, password })
       })
 
       const data = await response.json()

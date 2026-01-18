@@ -212,12 +212,12 @@ export async function PUT(request: NextRequest) {
 
     if (initialLinks.includes(linkToDelete)) {
       // Remove from initial_session_material
-      const updatedInitialLinks = initialLinks.filter(link => link !== linkToDelete)
+      const updatedInitialLinks = initialLinks.filter((link: string) => link !== linkToDelete)
       updateData.initial_session_material = updatedInitialLinks.join(', ')
       deletedFrom = 'initial_session_material'
     } else if (sessionLinks.includes(linkToDelete)) {
       // Remove from session_material
-      const updatedSessionLinks = sessionLinks.filter(link => link !== linkToDelete)
+      const updatedSessionLinks = sessionLinks.filter((link: string) => link !== linkToDelete)
       updateData.session_material = updatedSessionLinks.join(', ')
       deletedFrom = 'session_material'
     } else {

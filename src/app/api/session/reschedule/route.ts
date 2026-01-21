@@ -74,11 +74,8 @@ export async function POST(request: NextRequest) {
     // - Sending notifications to students, mentors, supermentors
     // - Resetting email_sent and whatsapp_sent flags
     
-    // Use request origin to get the correct port (handles dev server port changes)
-    const baseUrl = request.nextUrl.origin
-    
     const sessionUpdateResponse = await fetch(
-      `${baseUrl}/api/cohort/session-update`,
+      `${process.env.NEXT_PUBLIC_BASE_URL || request.nextUrl.origin}/api/cohort/session-update`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

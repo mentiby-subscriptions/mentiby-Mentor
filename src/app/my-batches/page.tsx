@@ -68,7 +68,9 @@ function MyBatchesContent() {
   const fetchSessions = async (batch: Batch) => {
     setLoadingSessions(true)
     try {
-      const response = await fetch(`/api/cohort/schedule?tableName=${batch.tableName}`)
+      // Pass mentor_id to filter classes where current mentor is primary or swapped mentor
+      const mentorIdParam = user?.mentorId ? `&mentor_id=${user.mentorId}` : ''
+      const response = await fetch(`/api/cohort/schedule?tableName=${batch.tableName}${mentorIdParam}`)
       const data = await response.json()
       if (response.ok) {
         setSessions(data.schedule || [])

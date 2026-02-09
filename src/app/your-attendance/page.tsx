@@ -301,15 +301,15 @@ export default function YourAttendancePage() {
               <ul className="space-y-3 text-sm text-slate-400">
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                  <span><strong className="text-white">Present:</strong> Classes you were assigned and completed</span>
+                  <span><strong className="text-white">Present:</strong> Past classes you completed with a recording</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <XCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
-                  <span><strong className="text-white">Absent:</strong> Classes you were assigned but not completed or other mentor took</span>
+                  <span><strong className="text-white">Absent:</strong> Past classes where another mentor took it (swapped), or you did nothing (no recording, no swap)</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <Award className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
-                  <span><strong className="text-white">Special:</strong> Classes you took on behalf of other mentors</span>
+                  <span><strong className="text-white">Special:</strong> Classes you took on behalf of other mentors (with recording)</span>
                 </li>
               </ul>
             </div>

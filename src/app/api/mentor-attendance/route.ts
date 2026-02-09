@@ -60,6 +60,12 @@ export async function POST(request: NextRequest) {
 
     console.log(`Found ${cohortTables.length} cohort tables:`, cohortTables)
 
+    // Get today's date in YYYY-MM-DD format (IST)
+    const now = new Date()
+    now.setHours(now.getHours() + 5, now.getMinutes() + 30) // Convert to IST
+    const todayDate = now.toISOString().split('T')[0]
+    console.log(`Today's date (IST): ${todayDate}`)
+
     // Step 3: Process the specific mentor
     const mentorName = mentor.Name || 'Unknown'
     const mentorEmail = mentor['Email address'] || null
@@ -72,44 +78,51 @@ export async function POST(request: NextRequest) {
     // Search all cohort tables for this mentor's assigned classes
     for (const tableName of cohortTables) {
       try {
-        // Get all classes assigned to this mentor that are completed (have session_recording)
-        const { data: classes, error: classesError } = await supabaseB
+        // Get ALL past classes assigned to this mentor (regardless of recording status)
+        // Past = date < today
+        const { data: allPastClasses, error: pastClassesError } = await supabaseB
           .from(tableName)
-          .select('id, mentor_id, swapped_mentor_id, session_recording')
+          .select('id, date, mentor_id, swapped_mentor_id, session_recording')
           .eq('mentor_id', mentorId)
-          .not('session_recording', 'is', null)
-          .neq('session_recording', '')
+          .lt('date', todayDate) // Only past classes
 
-        if (classesError) {
-          console.log(`  Error querying ${tableName}:`, classesError.message)
+        if (pastClassesError) {
+          console.log(`  Error querying ${tableName}:`, pastClassesError.message)
           continue
         }
 
-        if (classes && classes.length > 0) {
-          console.log(`  Found ${classes.length} assigned completed classes in ${tableName}`)
+        if (allPastClasses && allPastClasses.length > 0) {
+          console.log(`  Found ${allPastClasses.length} past assigned classes in ${tableName}`)
 
-          for (const cls of classes) {
+          for (const cls of allPastClasses) {
             totalCompletedClasses++
 
-            // Check if swapped_mentor_id is present
-            if (cls.swapped_mentor_id !== null && cls.swapped_mentor_id !== undefined) {
+            const hasRecording = cls.session_recording !== null && cls.session_recording !== ''
+            const wasSwapped = cls.swapped_mentor_id !== null && cls.swapped_mentor_id !== undefined
+
+            if (!hasRecording && !wasSwapped) {
+              // No recording AND no swap = mentor did nothing = ABSENT
+              absentCount++
+              console.log(`    Class ${cls.id} (${cls.date}): ABSENT (no recording, no action taken)`)
+            } else if (wasSwapped) {
               // Swapped mentor took the class = original mentor was absent
               absentCount++
-              console.log(`    Class ${cls.id}: ABSENT (swapped to mentor ${cls.swapped_mentor_id})`)
+              console.log(`    Class ${cls.id} (${cls.date}): ABSENT (swapped to mentor ${cls.swapped_mentor_id})`)
             } else {
-              // No swap = original mentor was present
+              // Has recording and no swap = original mentor was present
               presentCount++
-              console.log(`    Class ${cls.id}: PRESENT`)
+              console.log(`    Class ${cls.id} (${cls.date}): PRESENT`)
             }
           }
         }
 
         // Also check for special attendance: classes where this mentor is the swapped mentor
-        // (they took someone else's class)
+        // (they took someone else's class) - only count completed ones with recordings
         const { data: swappedClasses, error: swappedError } = await supabaseB
           .from(tableName)
-          .select('id, mentor_id, swapped_mentor_id, session_recording')
+          .select('id, date, mentor_id, swapped_mentor_id, session_recording')
           .eq('swapped_mentor_id', mentorId)
+          .lt('date', todayDate) // Only past classes
           .not('session_recording', 'is', null)
           .neq('session_recording', '')
 
@@ -118,7 +131,7 @@ export async function POST(request: NextRequest) {
           specialAttendance += swappedClasses.length
           
           for (const cls of swappedClasses) {
-            console.log(`    Class ${cls.id}: SPECIAL (covered for mentor ${cls.mentor_id})`)
+            console.log(`    Class ${cls.id} (${cls.date}): SPECIAL (covered for mentor ${cls.mentor_id})`)
           }
         }
 

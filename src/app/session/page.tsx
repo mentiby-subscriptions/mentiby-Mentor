@@ -853,6 +853,7 @@ function SessionDetailsPage() {
             </button>
           )}
           
+          {/* Attendance upload button - commented out
           <button
             onClick={handleUploadAttendance}
             className="flex items-center justify-center gap-2 px-3 py-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 hover:border-blue-500/50 text-blue-400 rounded-xl transition-all group"
@@ -860,6 +861,7 @@ function SessionDetailsPage() {
             <Upload className="w-4 h-4" />
             <span className="font-medium text-sm">Attendance</span>
           </button>
+          */}
 
           {!isSwappedMentor() && !hasRecording() && (
             <button
